@@ -2,10 +2,23 @@
   <div class="test-plans-container">
     <a-page-header
       title="测试计划管理"
-      :sub-title="`项目：${currentProject?.name || '未选择项目'}`"
     >
       <template #extra>
         <a-space>
+          <a-select
+            v-model:value="currentProjectId"
+            style="width: 200px"
+            placeholder="选择项目"
+            @change="handleProjectChange"
+          >
+            <a-select-option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </a-select-option>
+          </a-select>
           <a-button type="primary" @click="createPlan">
             <template #icon><PlusOutlined /></template>
             新建计划
@@ -205,7 +218,7 @@
       <TestPlanEdit
         v-if="editModalVisible"
         :plan-id="editingPlanId"
-        :project-id="projectId"
+        :project-id="projectId || ''"
         @save="handlePlanSaved"
         @cancel="closeEditModal"
       />
@@ -258,20 +271,36 @@ import {
   DownOutlined
 } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
-import type { TestPlan, Environment } from '@/types'
+import type { TestPlan, Environment, Project } from '@/types'
 import { testPlanApi } from '@/api/testPlan'
+import { useProjectStore } from '@/stores/project'
 import TestPlanDetail from '@/components/TestPlan/TestPlanDetail.vue'
 import TestPlanEdit from '@/components/TestPlan/TestPlanEdit.vue'
 
 const route = useRoute()
 const router = useRouter()
+const projectStore = useProjectStore()
 
-// 计算属性
-const projectId = computed(() => route.params.projectId as string)
-const currentProject = computed(() => {
-  // 这里应该从store中获取当前项目信息
-  return { id: projectId.value, name: '当前项目' }
+// 项目选择
+const projects = computed<Project[]>(() => projectStore.projects)
+const currentProjectId = computed<string | undefined>({
+  get() {
+    return projectStore.currentProject?.id || projects.value[0]?.id
+  },
+  set(value: string | undefined) {
+    if (!value) return
+    const target = projects.value.find(p => p.id === value) || null
+    projectStore.setCurrentProject(target)
+    loadPlans()
+  }
 })
+
+const projectId = computed<string | undefined>(() => {
+  if (projectStore.currentProject) return projectStore.currentProject.id
+  return projects.value[0]?.id
+})
+
+const currentProject = computed(() => projectStore.currentProject)
 
 // 响应式数据
 const loading = ref(false)
@@ -371,6 +400,10 @@ const loadPlans = async () => {
       endDate: dateRange.value?.[1]?.format('YYYY-MM-DD')
     }
     
+    if (!projectId.value) {
+      message.warning('请先选择项目')
+      return
+    }
     const response = await testPlanApi.getTestPlans(projectId.value, params)
     plans.value = response.items
     pagination.value.total = response.total
@@ -556,6 +589,10 @@ const completePlan = async (plan: TestPlan) => {
 
 const clonePlan = async (plan: TestPlan) => {
   try {
+    if (!projectId.value) {
+      message.warning('请先选择项目')
+      return
+    }
     await testPlanApi.clonePlan(projectId.value, plan.id)
     message.success('计划复制成功')
     loadPlans()
@@ -667,17 +704,29 @@ const formatDate = (date: string) => {
   return new Date(date).toLocaleDateString('zh-CN')
 }
 
+const handleProjectChange = () => {
+  loadPlans()
+}
+
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
+  // 确保项目列表已加载
+  if (projects.value.length === 0) {
+    await projectStore.fetchProjects()
+  }
+  // 如果没有当前项目，设置第一个项目为当前项目
+  if (!projectStore.currentProject && projects.value.length > 0) {
+    projectStore.setCurrentProject(projects.value[0])
+  }
   loadPlans()
   loadEnvironments()
 })
 
-// 监听项目ID变化
+// 监听项目变化
 watch(
-  () => route.params.projectId,
+  () => projectStore.currentProject?.id,
   () => {
-    if (route.params.projectId) {
+    if (projectId.value) {
       loadPlans()
       loadEnvironments()
     }

@@ -38,7 +38,7 @@ const routes = [
         }
       },
       {
-        path: 'projects/:projectId/test-cases',
+        path: 'test-cases',
         name: 'TestCases',
         component: () => import('@views/TestCases.vue'),
         meta: {
@@ -47,7 +47,7 @@ const routes = [
         }
       },
       {
-        path: 'projects/:projectId/test-plans',
+        path: 'test-plans',
         name: 'TestPlans',
         component: () => import('@views/TestPlans.vue'),
         meta: {
@@ -56,7 +56,7 @@ const routes = [
         }
       },
       {
-        path: 'projects/:projectId/executions',
+        path: 'executions',
         name: 'Executions',
         component: () => import('@views/Executions.vue'),
         meta: {

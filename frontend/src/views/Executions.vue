@@ -2,10 +2,23 @@
   <div class="executions-container">
     <a-page-header
       title="执行历史"
-      :sub-title="`项目：${currentProject?.name || '未选择项目'}`"
     >
       <template #extra>
         <a-space>
+          <a-select
+            v-model:value="currentProjectId"
+            style="width: 200px"
+            placeholder="选择项目"
+            @change="handleProjectChange"
+          >
+            <a-select-option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </a-select-option>
+          </a-select>
           <a-button @click="refreshExecutions">
             <template #icon><ReloadOutlined /></template>
             刷新
@@ -160,28 +173,30 @@
             >
               <template #renderItem="{ item }">
                 <a-list-item>
-                  <a-card>
-                    <a @click="downloadAttachment(item.id)">
-                      <template #cover>
-                        <img
-                          v-if="isImage(item.fileType)"
-                          :src="item.filePath"
-                          alt="附件"
-                          style="width: 100%; height: 120px; object-fit: cover"
-                        />
-                        <div v-else class="file-icon">
-                          <FileOutlined style="font-size: 48px; color: #1890ff" />
-                        </div>
+                  <a-card
+                    hoverable
+                    @click="downloadAttachment(item.id)"
+                    style="cursor: pointer"
+                  >
+                    <template #cover>
+                      <img
+                        v-if="isImage(item.fileType)"
+                        :src="item.filePath"
+                        alt="附件"
+                        style="width: 100%; height: 120px; object-fit: cover"
+                      />
+                      <div v-else class="file-icon">
+                        <FileOutlined style="font-size: 48px; color: #1890ff" />
+                      </div>
+                    </template>
+                    <a-card-meta>
+                      <template #title>
+                        <div class="attachment-name">{{ item.fileName }}</div>
                       </template>
-                      <a-card-meta>
-                        <template #title>
-                          <div class="attachment-name">{{ item.fileName }}</div>
-                        </template>
-                        <template #description>
-                          <div class="attachment-size">{{ formatFileSize(item.fileSize) }}</div>
-                        </template>
-                      </a-card-meta>
-                    </a>
+                      <template #description>
+                        <div class="attachment-size">{{ formatFileSize(item.fileSize) }}</div>
+                      </template>
+                    </a-card-meta>
                   </a-card>
                 </a-list-item>
               </template>
@@ -207,7 +222,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
@@ -218,14 +233,36 @@ import {
 } from '@ant-design/icons-vue'
 import { executionApi } from '@/api/execution'
 import { useProjectStore } from '@/stores/project'
-import type { TestExecution } from '@/types'
+import type { TestExecution, Project } from '@/types'
 import dayjs from 'dayjs'
 
 const route = useRoute()
 const projectStore = useProjectStore()
 
-const projectId = computed(() => route.params.projectId as string)
+// 项目选择
+const projects = computed<Project[]>(() => projectStore.projects)
+const currentProjectId = computed<string | undefined>({
+  get() {
+    return projectStore.currentProject?.id || projects.value[0]?.id
+  },
+  set(value: string | undefined) {
+    if (!value) return
+    const target = projects.value.find(p => p.id === value) || null
+    projectStore.setCurrentProject(target)
+    loadExecutions()
+  }
+})
+
+const projectId = computed<string | undefined>(() => {
+  if (projectStore.currentProject) return projectStore.currentProject.id
+  return projects.value[0]?.id
+})
+
 const currentProject = computed(() => projectStore.currentProject)
+
+const handleProjectChange = () => {
+  loadExecutions()
+}
 
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -294,6 +331,10 @@ const columns = [
 ]
 
 const loadExecutions = async () => {
+  if (!projectId.value) {
+    message.warning('请先选择项目')
+    return
+  }
   loading.value = true
   try {
     const params: any = {
@@ -461,9 +502,27 @@ const isImage = (fileType: string) => {
   return fileType?.startsWith('image/')
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 确保项目列表已加载
+  if (projects.value.length === 0) {
+    await projectStore.fetchProjects()
+  }
+  // 如果没有当前项目，设置第一个项目为当前项目
+  if (!projectStore.currentProject && projects.value.length > 0) {
+    projectStore.setCurrentProject(projects.value[0])
+  }
   loadExecutions()
 })
+
+// 监听项目变化
+watch(
+  () => projectStore.currentProject?.id,
+  () => {
+    if (projectId.value) {
+      loadExecutions()
+    }
+  }
+)
 </script>
 
 <style scoped>

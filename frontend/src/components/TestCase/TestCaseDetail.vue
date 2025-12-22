@@ -220,12 +220,18 @@ const fetchCaseDetail = async () => {
 
   loading.value = true
   try {
-    // 这里需要从路由参数获取项目ID
+    // 从路由参数获取项目ID
     const projectId = router.currentRoute.value.params.projectId as string
+    if (!projectId) {
+      message.error('项目ID不存在')
+      return
+    }
     const response = await testCaseApi.getTestCase(projectId, props.caseId)
     testCase.value = response
     
-    // 模拟获取附件和执行历史数据
+    // TODO: 获取附件和执行历史数据
+    // attachments.value = await testCaseApi.getAttachments(projectId, props.caseId)
+    // executions.value = await executionApi.getCaseExecutions(projectId, props.caseId)
     attachments.value = []
     executions.value = []
   } catch (error) {

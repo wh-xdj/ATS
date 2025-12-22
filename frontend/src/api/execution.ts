@@ -24,12 +24,14 @@ export const executionApi = {
         }
       })
     }
-    const url = `/projects/${projectId}/executions${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    queryParams.append('project_id', projectId)
+    const url = `/executions${queryParams.toString() ? '?' + queryParams.toString() : ''}`
     return apiClient.get(url)
   },
 
-  getExecution: async (executionId: string): Promise<TestExecution> => {
-    return apiClient.get(`/executions/${executionId}`)
+  getExecution: async (executionId: string, projectId?: string): Promise<TestExecution> => {
+    const url = projectId ? `/executions/${executionId}?project_id=${projectId}` : `/executions/${executionId}`
+    return apiClient.get(url)
   },
 
   updateExecution: async (

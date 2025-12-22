@@ -440,14 +440,14 @@ const loadTestCase = async () => {
     const data = await testCaseApi.getTestCase(props.projectId, props.caseId)
     Object.assign(testCase, data)
     
-    // 填充表单数据
+    // 填充表单数据（处理字段名映射：后端可能返回下划线格式）
     formData.name = data.name
     formData.type = data.type
     formData.priority = data.priority
-    formData.moduleId = data.moduleId || ''
+    formData.moduleId = (data.moduleId || data.module_id || '') as string
     formData.precondition = data.precondition || ''
-    formData.expectedResult = data.expectedResult || ''
-    formData.requirementRef = data.requirementRef || ''
+    formData.expectedResult = data.expectedResult || data.expected_result || ''
+    formData.requirementRef = data.requirementRef || data.requirement_ref || ''
     formData.tags = data.tags || []
     formData.steps = data.steps || []
   } catch (error) {
@@ -503,9 +503,21 @@ const handleSave = async () => {
     
     saving.value = true
     
-    const submitData = {
-      ...formData,
-      projectId: props.projectId
+    // 转换字段名：前端使用驼峰，后端使用下划线
+    const submitData: any = {
+      name: formData.name,
+      type: formData.type,
+      priority: formData.priority,
+      module_id: formData.moduleId || null,
+      precondition: formData.precondition,
+      expected_result: formData.expectedResult,
+      requirement_ref: formData.requirementRef,
+      tags: formData.tags,
+      steps: formData.steps.map(step => ({
+        step: step.step,
+        action: step.action,
+        expected: step.expected
+      }))
     }
 
     let result: TestCase

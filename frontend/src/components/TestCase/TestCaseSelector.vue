@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    v-model:visible="visible"
+    v-model:visible="innerVisible"
     title="选择测试用例"
     width="1000px"
     :footer="null"
@@ -189,6 +189,12 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// 用于 v-model 绑定的本地可写 computed
+const innerVisible = computed({
+  get: () => props.visible,
+  set: (value: boolean) => emit('update:visible', value)
+})
 
 // 响应式数据
 const loading = ref(false)

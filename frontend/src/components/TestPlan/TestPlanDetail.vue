@@ -120,8 +120,8 @@
                 </a-tag>
               </template>
 
-              <template v-else-if="column.key ===                {{ formatDuration(record.duration) 'duration'">
- }}
+              <template v-else-if="column.key === 'duration'">
+                {{ formatDuration(record.duration) }}
               </template>
 
               <template v-else-if="column.key === 'executedAt'">

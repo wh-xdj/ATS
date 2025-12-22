@@ -14,24 +14,26 @@ export const testCaseApi = {
       type?: string
     }
   ): Promise<PaginationResponse<TestCase>> => {
-    const queryParams = new URLSearchParams()
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value))
-        }
-      })
+    const allParams: any = {
+      project_id: projectId,
+      ...params
     }
-    const url = `/projects/${projectId}/cases${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-    return apiClient.get(url)
+    return apiClient.get('/test-cases', { params: allParams })
   },
 
   getTestCase: async (projectId: string, caseId: string): Promise<TestCase> => {
-    return apiClient.get(`/projects/${projectId}/cases/${caseId}`)
+    return apiClient.get(`/test-cases/${caseId}`, {
+      params: { project_id: projectId }
+    })
   },
 
   createTestCase: async (projectId: string, data: Partial<TestCase>): Promise<TestCase> => {
-    return apiClient.post(`/projects/${projectId}/cases`, data)
+    // 后端使用下划线命名的 project_id
+    const payload: any = {
+      ...data,
+      project_id: projectId
+    }
+    return apiClient.post('/test-cases', payload)
   },
 
   updateTestCase: async (
@@ -39,15 +41,23 @@ export const testCaseApi = {
     caseId: string,
     data: Partial<TestCase>
   ): Promise<TestCase> => {
-    return apiClient.put(`/projects/${projectId}/cases/${caseId}`, data)
+    const payload: any = {
+      ...data,
+      project_id: projectId
+    }
+    return apiClient.put(`/test-cases/${caseId}`, payload)
   },
 
   deleteTestCase: async (projectId: string, caseId: string): Promise<void> => {
-    return apiClient.delete(`/projects/${projectId}/cases/${caseId}`)
+    return apiClient.delete(`/test-cases/${caseId}`, {
+      params: { project_id: projectId }
+    })
   },
 
   getCaseTree: async (projectId: string): Promise<any[]> => {
-    return apiClient.get(`/projects/${projectId}/case-tree`)
+    return apiClient.get('/test-cases/case-tree', {
+      params: { project_id: projectId }
+    })
   },
 
   importCases: async (

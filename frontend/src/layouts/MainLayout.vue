@@ -187,19 +187,19 @@ const menuItems = [
     key: 'test-cases',
     title: '测试用例',
     icon: ExperimentOutlined,
-    path: '/projects/test-cases'
+    path: '/test-cases'
   },
   {
     key: 'test-plans',
     title: '测试计划',
     icon: ScheduleOutlined,
-    path: '/projects/test-plans'
+    path: '/test-plans'
   },
   {
     key: 'executions',
     title: '执行历史',
     icon: PlayCircleOutlined,
-    path: '/projects/executions'
+    path: '/executions'
   },
   {
     key: 'environments',

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from database import engine, Base
-from api.v1 import auth, users, dashboard, projects, environments
+from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions
 
 # 创建数据库表（开发环境）
 # 注意：这需要数据库服务已启动
@@ -37,6 +37,9 @@ app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["认
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["用户管理"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["仪表盘"])
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["项目管理"])
+app.include_router(test_cases.router, prefix=f"{settings.API_V1_STR}/test-cases", tags=["测试用例"])
+app.include_router(test_plans.router, prefix=f"{settings.API_V1_STR}/test-plans", tags=["测试计划"])
+app.include_router(executions.router, prefix=f"{settings.API_V1_STR}/executions", tags=["执行历史"])
 app.include_router(environments.router, prefix=f"{settings.API_V1_STR}/environments", tags=["环境管理"])
 
 

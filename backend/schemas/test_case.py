@@ -29,6 +29,7 @@ class TestCaseBase(BaseModel):
 
 class TestCaseCreate(TestCaseBase):
     """创建测试用例请求"""
+    project_id: UUID
     module_id: Optional[UUID] = None
     executor_id: Optional[UUID] = None
 

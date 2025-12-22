@@ -5,6 +5,7 @@ from typing import List
 from database import get_db
 from models import Project
 from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from schemas.test_case import TestCaseCreate, TestCaseUpdate, TestCaseResponse
 from schemas.common import APIResponse, ResponseStatus
 from api.deps import get_current_user
 from models import User
@@ -254,5 +255,165 @@ async def get_case_tree(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
         data=tree_data
+    )
+
+
+# 测试用例相关路由
+@router.get("/{project_id}/cases", response_model=APIResponse)
+async def get_test_cases(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    page: int = 1,
+    size: int = 20,
+    search: str = None,
+    module_id: str = None,
+    status: str = None,
+    priority: str = None,
+    type: str = None
+):
+    """获取测试用例列表"""
+    # TODO: 从数据库获取真实数据
+    # 目前返回模拟数据
+    cases = [
+        {
+            "id": "case_1",
+            "projectId": str(project_id),
+            "moduleId": "module_1",
+            "caseCode": "TC-001",
+            "name": "测试用例001",
+            "type": "functional",
+            "priority": "P0",
+            "status": "not_executed",
+            "tags": ["回归", "冒烟"],
+            "createdAt": "2024-01-01T00:00:00",
+            "updatedAt": "2024-01-01T00:00:00"
+        }
+    ]
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="获取成功",
+        data={
+            "items": cases,
+            "total": len(cases),
+            "page": page,
+            "size": size,
+            "pages": 1,
+            "hasNext": False,
+            "hasPrev": False
+        }
+    )
+
+
+@router.get("/{project_id}/cases/{case_id}", response_model=APIResponse)
+async def get_test_case(
+    project_id: str,
+    case_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取测试用例详情"""
+    # TODO: 从数据库获取真实数据
+    case = {
+        "id": str(case_id),
+        "projectId": str(project_id),
+        "moduleId": "module_1",
+        "caseCode": "TC-001",
+        "name": "测试用例001",
+        "type": "functional",
+        "priority": "P0",
+        "precondition": "前置条件说明",
+        "steps": [
+            {"step": 1, "action": "打开登录页面", "expected": "页面正常显示"},
+            {"step": 2, "action": "输入用户名和密码", "expected": "输入成功"}
+        ],
+        "expectedResult": "登录成功",
+        "requirementRef": "REQ-001",
+        "status": "not_executed",
+        "tags": ["回归", "冒烟"],
+        "createdAt": "2024-01-01T00:00:00",
+        "updatedAt": "2024-01-01T00:00:00"
+    }
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="获取成功",
+        data=case
+    )
+
+
+@router.post("/{project_id}/cases", response_model=APIResponse)
+async def create_test_case(
+    project_id: str,
+    case_data: TestCaseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """创建测试用例"""
+    # TODO: 实现真实的创建逻辑
+    import uuid
+    case_id = str(uuid.uuid4())
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="创建成功",
+        data={
+            "id": case_id,
+            "projectId": str(project_id),
+            "moduleId": str(case_data.module_id) if case_data.module_id else None,
+            "caseCode": case_data.case_code,
+            "name": case_data.name,
+            "type": case_data.type,
+            "priority": case_data.priority,
+            "precondition": case_data.precondition,
+            "steps": case_data.steps,
+            "expectedResult": case_data.expected_result,
+            "requirementRef": case_data.requirement_ref,
+            "tags": case_data.tags or [],
+            "status": "not_executed",
+            "createdAt": "2024-01-01T00:00:00",
+            "updatedAt": "2024-01-01T00:00:00"
+        }
+    )
+
+
+@router.put("/{project_id}/cases/{case_id}", response_model=APIResponse)
+async def update_test_case(
+    project_id: str,
+    case_id: str,
+    case_data: TestCaseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更新测试用例"""
+    # TODO: 实现真实的更新逻辑
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="更新成功",
+        data={
+            "id": str(case_id),
+            "projectId": str(project_id),
+            "name": case_data.name or "测试用例",
+            "type": case_data.type or "functional",
+            "priority": case_data.priority or "P2",
+            "status": case_data.status or "not_executed",
+            "tags": case_data.tags or []
+        }
+    )
+
+
+@router.delete("/{project_id}/cases/{case_id}", response_model=APIResponse)
+async def delete_test_case(
+    project_id: str,
+    case_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """删除测试用例"""
+    # TODO: 实现真实的删除逻辑
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="删除成功"
     )
 

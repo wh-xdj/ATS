@@ -62,6 +62,23 @@ async def get_test_cases(
     )
 
 
+# 注意：/tree 必须在 /{case_id} 之前定义，否则会被错误匹配
+@router.get("/tree", response_model=APIResponse)
+async def get_case_tree(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取用例树（包含模块和用例）"""
+    tree_data = TestCaseService.get_case_tree(db=db, project_id=project_id)
+
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="获取成功",
+        data=tree_data,
+    )
+
+
 @router.get("/{case_id}", response_model=APIResponse)
 async def get_test_case(
     case_id: str,
@@ -161,21 +178,4 @@ async def delete_test_case(
         status=ResponseStatus.SUCCESS,
         message="删除成功",
     )
-
-
-@router.get("/tree", response_model=APIResponse)
-async def get_case_tree(
-    project_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """获取用例树（包含模块和用例）"""
-    tree_data = TestCaseService.get_case_tree(db=db, project_id=project_id)
-
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="获取成功",
-        data=tree_data,
-    )
-
 

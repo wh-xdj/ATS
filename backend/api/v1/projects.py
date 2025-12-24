@@ -163,16 +163,16 @@ async def get_project_modules(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取项目模块列表（数据库持久化）"""
-    modules = ModuleService.get_modules(db, project_id)
-    
-    # 序列化为 camelCase
-    module_list = serialize_list(modules, camel_case=True)
+    """获取项目模块列表（数据库持久化，包含用例数量）"""
+    module_list, total_case_count = ModuleService.get_modules_with_case_count(db, project_id)
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=module_list
+        data={
+            "modules": module_list,
+            "totalCaseCount": total_case_count
+        }
     )
 
 

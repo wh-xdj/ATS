@@ -94,16 +94,16 @@ class TestCaseService:
         current_user_id: str
     ) -> TestCase:
         """创建测试用例"""
-        # 生成case_code（如果未提供）
+        # 生成case_code（如果未提供）- 纯数字格式
         case_code = case_data.case_code
         if not case_code:
             timestamp = int(datetime.now().timestamp() * 1000) % 1000000
-            case_code = f"TC-{timestamp:06d}"
+            case_code = f"{timestamp:06d}"
 
             # 确保case_code唯一
             while db.query(TestCase).filter(TestCase.case_code == case_code).first():
                 timestamp = (timestamp + 1) % 1000000
-                case_code = f"TC-{timestamp:06d}"
+                case_code = f"{timestamp:06d}"
 
         # 创建测试用例对象（当前暂不强制关联模块，避免与尚未落库的模块产生外键冲突）
         test_case = TestCase(

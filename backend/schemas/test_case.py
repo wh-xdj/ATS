@@ -107,6 +107,7 @@ class TestCaseUpdate(BaseModel):
     expected_result: Optional[str] = None
     status: Optional[str] = None
     tags: Optional[List[str]] = None
+    module_id: Optional[str] = None  # 支持移动用例到不同模块
 
 
 class TestCaseResponse(TestCaseBase):

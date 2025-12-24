@@ -307,7 +307,7 @@
                   @change="handleImportTableChange"
                 />
               </template>
-              <template v-else-if="column.key === 'action'">
+              <template v-else-if="column.key === 'operations'">
                 <a-button
                   type="text"
                   size="small"
@@ -356,6 +356,7 @@ import { projectApi } from '@/api/project'
 interface Props {
   caseId?: string
   projectId: string
+  defaultModuleId?: string  // 默认模块ID（右键创建用例时使用）
 }
 
 interface Emits {
@@ -364,7 +365,8 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  caseId: ''
+  caseId: '',
+  defaultModuleId: ''
 })
 
 const emit = defineEmits<Emits>()
@@ -415,7 +417,7 @@ const importTableData = ref<Array<{ action: string; expected: string }>>([
 const importTableColumns = [
   { title: '操作描述', dataIndex: 'action', key: 'action' },
   { title: '预期结果', dataIndex: 'expected', key: 'expected' },
-  { title: '操作', key: 'action', width: 80 }
+  { title: '操作', key: 'operations', width: 80 }
 ]
 
 // 计算属性
@@ -504,26 +506,61 @@ const handleSave = async () => {
     saving.value = true
     
     // 转换字段名：前端使用驼峰，后端使用下划线
-    const submitData: any = {
-      name: formData.name,
-      type: formData.type,
-      priority: formData.priority,
-      module_id: formData.moduleId || null,
-      precondition: formData.precondition,
-      expected_result: formData.expectedResult,
-      requirement_ref: formData.requirementRef,
-      tags: formData.tags,
-      steps: formData.steps.map(step => ({
-        step: step.step,
-        action: step.action,
-        expected: step.expected
-      }))
+    // 确保 module_id 如果是空字符串或无效值，转换为 null
+    let moduleIdValue: string | null = null
+    if (formData.moduleId && formData.moduleId.trim() !== '') {
+      moduleIdValue = formData.moduleId.trim()
     }
+    
+    // 处理steps，确保始终是数组格式
+    const processedSteps = (formData.steps && Array.isArray(formData.steps) && formData.steps.length > 0)
+      ? formData.steps
+          .filter(step => step && (step.action || step.expected)) // 过滤掉空的步骤
+          .map((step, index) => ({
+            step: index + 1, // 重新编号
+            action: (step.action || '').trim(),
+            expected: (step.expected || '').trim()
+          }))
+      : []
+    
+    const submitData: any = {
+      name: formData.name.trim(),
+      type: formData.type || 'functional',
+      priority: formData.priority || 'P2',
+      module_id: moduleIdValue,  // 保留 null 值
+      precondition: formData.precondition && formData.precondition.trim() !== '' ? formData.precondition.trim() : null,
+      expected_result: formData.expectedResult && formData.expectedResult.trim() !== '' ? formData.expectedResult.trim() : null,
+      requirement_ref: formData.requirementRef && formData.requirementRef.trim() !== '' ? formData.requirementRef.trim() : null,
+      tags: Array.isArray(formData.tags) ? formData.tags : [],
+      steps: processedSteps  // 确保始终是数组
+    }
+    
+    // 移除 undefined 值，但保留 null 值（因为 module_id 等字段需要 null）
+    Object.keys(submitData).forEach(key => {
+      if (submitData[key] === undefined) {
+        delete submitData[key]
+      }
+    })
 
     let result: TestCase
     if (isNewCase.value) {
+      // 调试：打印发送的数据
+      console.log('创建测试用例 - projectId:', props.projectId)
+      console.log('创建测试用例 - submitData:', submitData)
+      try {
       result = await testCaseApi.createTestCase(props.projectId, submitData)
       message.success('用例创建成功')
+      } catch (error: any) {
+        console.error('创建测试用例失败:', error)
+        console.error('错误详情:', error.response?.data)
+        if (error.response?.data?.errors) {
+          const errorMessages = error.response.data.errors.map((e: any) => `${e.field}: ${e.message}`).join('\n')
+          message.error(`创建失败: ${errorMessages}`)
+        } else {
+          message.error(error.response?.data?.message || '创建失败')
+        }
+        throw error
+      }
     } else {
       result = await testCaseApi.updateTestCase(props.projectId, props.caseId, submitData)
       message.success('用例更新成功')
@@ -652,6 +689,11 @@ const viewAttachments = () => {
 onMounted(() => {
   loadTestCase()
   loadModuleTree()
+  
+  // 如果是新建用例且传入了默认模块ID，则设置默认值
+  if (!props.caseId && props.defaultModuleId) {
+    formData.moduleId = props.defaultModuleId
+  }
 })
 
 // 监听 props 变化

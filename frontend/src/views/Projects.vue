@@ -33,7 +33,7 @@
           show-icon
           @select="handleTreeSelect"
           @expand="handleTreeExpand"
-        >
+    >
           <template #icon="{ isLeaf }">
             <FolderOutlined v-if="!isLeaf" />
             <FileOutlined v-else />
@@ -44,10 +44,10 @@
       <!-- 右侧项目列表 -->
       <a-layout-content class="projects-content">
         <div class="content-header">
-          <a-button type="primary" @click="showCreateModal">
-            <template #icon><PlusOutlined /></template>
+        <a-button type="primary" @click="showCreateModal">
+          <template #icon><PlusOutlined /></template>
             添加项目
-          </a-button>
+        </a-button>
 
           <a-space>
             <a-select
@@ -74,10 +74,10 @@
               </a-button>
               <a-button :type="viewLayout === 'grid' ? 'primary' : 'default'" @click="viewLayout = 'grid'">
                 <template #icon><AppstoreOutlined /></template>
-              </a-button>
+            </a-button>
             </a-button-group>
           </a-space>
-        </div>
+      </div>
 
         <a-card class="table-card">
           <a-table
@@ -120,7 +120,7 @@
               <template v-else-if="column.key === 'createdAt'">
                 {{ formatDateTime(record.createdAt) }}
               </template>
-
+              
               <template v-else-if="column.key === 'actions'">
                 <a-space>
                   <a-button type="link" size="small" @click="handleEdit(record)">
@@ -128,24 +128,24 @@
                   </a-button>
                   <a-dropdown>
                     <a-button type="link" size="small">
-                      <template #icon><MoreOutlined /></template>
-                    </a-button>
-                    <template #overlay>
+                    <template #icon><MoreOutlined /></template>
+                  </a-button>
+                  <template #overlay>
                       <a-menu @click="handleMenuClick($event, record)">
-                        <a-menu-item key="members">成员管理</a-menu-item>
-                        <a-menu-divider />
+                      <a-menu-item key="members">成员管理</a-menu-item>
+                      <a-menu-divider />
                         <a-menu-item key="archive" v-if="record.status === 'active'">
-                          归档
-                        </a-menu-item>
-                        <a-menu-item key="delete" danger>删除</a-menu-item>
-                      </a-menu>
-                    </template>
-                  </a-dropdown>
+                        归档
+                      </a-menu-item>
+                      <a-menu-item key="delete" danger>删除</a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
                 </a-space>
               </template>
             </template>
           </a-table>
-        </a-card>
+            </a-card>
       </a-layout-content>
     </a-layout>
 

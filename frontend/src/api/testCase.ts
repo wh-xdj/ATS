@@ -9,15 +9,30 @@ export const testCaseApi = {
       size?: number
       search?: string
       moduleId?: string
+      moduleIds?: string  // 逗号分隔的模块 ID 列表（包含子模块）
       status?: string
       priority?: string
       type?: string
     }
   ): Promise<PaginationResponse<TestCase>> => {
+    // 转换参数名称为后端期望的 snake_case
     const allParams: any = {
       project_id: projectId,
-      ...params
+      page: params?.page,
+      size: params?.size,
+      search: params?.search,
+      module_id: params?.moduleId,  // 单个模块 ID
+      module_ids: params?.moduleIds,  // 多个模块 ID（逗号分隔）
+      status: params?.status,
+      priority: params?.priority,
+      type: params?.type
     }
+    // 移除 undefined 值
+    Object.keys(allParams).forEach(key => {
+      if (allParams[key] === undefined) {
+        delete allParams[key]
+      }
+    })
     return apiClient.get('/test-cases', { params: allParams })
   },
 
@@ -55,7 +70,7 @@ export const testCaseApi = {
   },
 
   getCaseTree: async (projectId: string): Promise<any[]> => {
-    return apiClient.get('/test-cases/case-tree', {
+    return apiClient.get('/test-cases/tree', {
       params: { project_id: projectId }
     })
   },

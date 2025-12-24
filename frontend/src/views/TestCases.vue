@@ -41,15 +41,18 @@
           @rightClick="handleModuleRightClick"
           @drop="handleModuleDrop"
         >
-          <template #title="{ title, count }">
+          <template #title="{ title, count, nodeType, caseCode }">
             <span>
               {{ title }}
-              <span v-if="count !== undefined" class="count-badge">({{ count }})</span>
+              <span v-if="count !== undefined && nodeType !== 'case'" class="count-badge">({{ count }})</span>
+              <span v-if="caseCode" class="case-code-badge">{{ caseCode }}</span>
             </span>
           </template>
-          <template #icon="{ isLeaf }">
-            <FolderOutlined v-if="!isLeaf" />
-            <FileOutlined v-else />
+          <template #icon="{ nodeType, isLeaf }">
+            <FolderOutlined v-if="nodeType === 'module'" />
+            <FileTextOutlined v-else-if="nodeType === 'case'" style="color: #1890ff" />
+            <FileOutlined v-else-if="isLeaf" />
+            <FolderOutlined v-else />
           </template>
         </a-tree>
 
@@ -61,14 +64,26 @@
           @click.stop
         >
           <a-menu @click="handleModuleContextMenuClick">
-            <a-menu-item key="addModule">新增模块</a-menu-item>
-            <a-menu-item key="addCase">新增用例</a-menu-item>
-            <a-menu-item key="rename">重命名</a-menu-item>
-            <a-menu-item key="delete">删除</a-menu-item>
-            <a-menu-divider v-if="selectedModuleKeys.length > 1" />
-            <a-menu-item v-if="selectedModuleKeys.length > 1" key="batchDelete">
-              批量删除所选模块
-            </a-menu-item>
+            <!-- 虚拟节点只显示新增操作 -->
+            <template v-if="contextMenuNodeType === 'virtual'">
+              <a-menu-item key="addModule">新增模块</a-menu-item>
+              <a-menu-item key="addCase">新增用例</a-menu-item>
+            </template>
+            <!-- 模块节点显示全部操作 -->
+            <template v-else-if="contextMenuNodeType === 'module'">
+              <a-menu-item key="addModule">新增子模块</a-menu-item>
+              <a-menu-item key="addCase">新增用例</a-menu-item>
+              <a-menu-item key="rename">重命名</a-menu-item>
+              <a-menu-item key="delete">删除</a-menu-item>
+              <a-menu-divider v-if="selectedModuleKeys.length > 1" />
+              <a-menu-item v-if="selectedModuleKeys.length > 1" key="batchDelete">
+                批量删除所选模块
+              </a-menu-item>
+            </template>
+            <!-- 用例节点只显示删除操作 -->
+            <template v-else-if="contextMenuNodeType === 'case'">
+              <a-menu-item key="deleteCase">删除用例</a-menu-item>
+            </template>
           </a-menu>
         </div>
       </a-layout-sider>
@@ -311,6 +326,7 @@
             <TestCaseEdit
         :case-id="editingCaseId"
               :project-id="projectId"
+              :default-module-id="defaultModuleId"
               @save="handleSaveCase"
         @cancel="editCaseVisible = false"
       />
@@ -339,7 +355,8 @@ import {
   MoreOutlined,
   DownOutlined,
   FolderOutlined,
-  FileOutlined
+  FileOutlined,
+  FileTextOutlined
 } from '@ant-design/icons-vue'
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'
 import ImportCasesModal from '@/components/TestCase/ImportCasesModal.vue'
@@ -402,6 +419,24 @@ const moduleContextMenu = reactive<{
   x: 0,
   y: 0,
   node: null
+})
+
+// 计算右键菜单节点类型
+const contextMenuNodeType = computed(() => {
+  const node = moduleContextMenu.node
+  if (!node) return 'virtual'
+  
+  const key = node.key as string
+  if (key === 'all' || key === 'unplanned') {
+    return 'virtual'
+  }
+  
+  // 检查是否是用例节点（key以case_开头）
+  if (key.startsWith('case_')) {
+    return 'case'
+  }
+  
+  return 'module'
 })
 
 // 右侧表格
@@ -535,6 +570,7 @@ const rowSelection = computed(() => ({
 // 编辑用例
 const editCaseVisible = ref(false)
 const editingCaseId = ref<string>('')
+const defaultModuleId = ref<string>('')  // 右键创建用例时的默认模块
 
 // 导入对话框
 const importModalVisible = ref(false)
@@ -547,21 +583,14 @@ const loadModuleTree = async () => {
     modules.value = response
     const treeData = buildModuleTree(response)
     
-    // 添加"全部用例"和"未规划用例"节点
+    // 添加"全部用例"节点
     const allCasesCount = testCases.value.length
-    const unplannedCount = testCases.value.filter(c => !c.moduleId).length
     
     moduleTreeData.value = [
       {
         title: '全部用例',
         key: 'all',
         count: allCasesCount,
-        isLeaf: true
-      },
-      {
-        title: '未规划用例',
-        key: 'unplanned',
-        count: unplannedCount,
         isLeaf: true
       },
       ...treeData
@@ -576,18 +605,21 @@ const buildModuleTree = (modules: any[]): any[] => {
   const treeMap = new Map()
   const treeData: any[] = []
 
+  // 第一步：构建模块节点
   modules.forEach(module => {
-    const caseCount = testCases.value.filter(c => c.moduleId === module.id).length
+    const moduleCases = testCases.value.filter(c => c.moduleId === module.id)
     treeMap.set(module.id, {
       title: module.name,
       key: module.id,
-      count: caseCount,
+      count: moduleCases.length,
       isLeaf: false,
+      nodeType: 'module',  // 标识节点类型
       children: [],
       raw: module
     })
   })
 
+  // 第二步：建立模块父子关系
   modules.forEach(module => {
     const node = treeMap.get(module.id)
     if (module.parentId && treeMap.has(module.parentId)) {
@@ -597,6 +629,25 @@ const buildModuleTree = (modules: any[]): any[] => {
     }
   })
 
+  // 第三步：将用例添加到对应模块下
+  modules.forEach(module => {
+    const moduleCases = testCases.value.filter(c => c.moduleId === module.id)
+    const moduleNode = treeMap.get(module.id)
+    
+    moduleCases.forEach(tc => {
+      moduleNode.children.push({
+        title: tc.name,
+        key: `case_${tc.id}`,  // 用例key加前缀区分
+        isLeaf: true,
+        nodeType: 'case',  // 标识节点类型
+        caseId: tc.id,
+        caseCode: tc.caseCode,
+        priority: tc.priority,
+        raw: tc
+      })
+    })
+  })
+
   return treeData
 }
 
@@ -604,7 +655,7 @@ const rebuildFlatModuleKeys = () => {
   const result: string[] = []
   const traverse = (nodes: any[]) => {
     nodes.forEach(node => {
-      if (node.key !== 'all' && node.key !== 'unplanned') {
+      if (node.key !== 'all' && node.key !== 'unplanned' && node.nodeType === 'module') {
         result.push(node.key)
       }
       if (node.children && node.children.length > 0) {
@@ -614,6 +665,39 @@ const rebuildFlatModuleKeys = () => {
   }
   traverse(moduleTreeData.value)
   flatModuleKeys.value = result
+}
+
+// 获取模块及其所有子模块的 ID 列表
+const getModuleAndChildrenIds = (moduleId: string): string[] => {
+  const result: string[] = [moduleId]
+  
+  const findNode = (nodes: any[], targetId: string): any => {
+    for (const node of nodes) {
+      if (node.key === targetId) return node
+      if (node.children && node.children.length > 0) {
+        const found = findNode(node.children, targetId)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  
+  const collectChildModuleIds = (node: any) => {
+    if (!node.children) return
+    node.children.forEach((child: any) => {
+      if (child.nodeType === 'module') {
+        result.push(child.key)
+        collectChildModuleIds(child)
+      }
+    })
+  }
+  
+  const targetNode = findNode(moduleTreeData.value, moduleId)
+  if (targetNode) {
+    collectChildModuleIds(targetNode)
+  }
+  
+  return result
 }
 
 // 加载测试用例列表
@@ -632,11 +716,9 @@ const loadTestCases = async () => {
     }
     
     if (selectedModuleKeys.value[0] && selectedModuleKeys.value[0] !== 'all') {
-      if (selectedModuleKeys.value[0] === 'unplanned') {
-        // 未规划用例
-      } else {
-        params.moduleId = selectedModuleKeys.value[0]
-      }
+      // 获取当前模块及其所有子模块的 ID
+      const moduleIds = getModuleAndChildrenIds(selectedModuleKeys.value[0])
+      params.moduleIds = moduleIds.join(',')  // 传递逗号分隔的模块 ID 列表
     }
     
     if (filters.level) {
@@ -741,6 +823,7 @@ const handleTableChange = (pag: any, filters: any, sorter: any) => {
 // 创建用例
 const handleCreateCase = () => {
   editingCaseId.value = ''
+  defaultModuleId.value = ''  // 从工具栏创建时不设置默认模块
   editCaseVisible.value = true
 }
 
@@ -785,20 +868,28 @@ const handleDeleteCase = async (record: TestCase) => {
 const handleCopyCase = async (record: TestCase) => {
   try {
     const originalCase = await testCaseApi.getTestCase(projectId.value, record.id)
-    const newCaseData = {
-      ...originalCase,
+    const newCaseData: any = {
       name: `${originalCase.name} (副本)`,
-      caseCode: `${originalCase.caseCode}-COPY`
+      type: originalCase.type,
+      priority: originalCase.priority,
+      precondition: originalCase.precondition,
+      steps: originalCase.steps,
+      expectedResult: originalCase.expectedResult,
+      requirementRef: originalCase.requirementRef,
+      modulePath: originalCase.modulePath,
+      moduleId: originalCase.moduleId,
+      executorId: originalCase.executorId,
+      tags: originalCase.tags,
+      level: originalCase.level,
     }
-    delete newCaseData.id
-    delete newCaseData.createdAt
-    delete newCaseData.updatedAt
+    // 不复制ID、创建时间、更新时间、创建人、更新人、case_code（让后端自动生成）
     
     await testCaseApi.createTestCase(projectId.value, newCaseData)
     message.success('复制成功')
     await loadTestCases()
     await loadModuleTree()
   } catch (error) {
+    console.error('复制用例失败:', error)
     message.error('复制失败')
   }
 }
@@ -939,6 +1030,12 @@ const handleModuleDrop = async (info: any) => {
       description: dragModule.description
     })
     message.success('模块已移动')
+    
+    // 自动展开新的父模块
+    if (newParentId && !expandedModuleKeys.value.includes(newParentId)) {
+      expandedModuleKeys.value = [...expandedModuleKeys.value, newParentId]
+    }
+    
     await loadModuleTree()
   } catch (error) {
     console.error('Failed to move module:', error)
@@ -961,7 +1058,38 @@ const handleModuleContextMenuClick = ({ key }: { key: string }) => {
     handleDeleteModule(node)
   } else if (key === 'batchDelete') {
     handleBatchDeleteModules()
+  } else if (key === 'deleteCase') {
+    handleDeleteCaseFromTree(node)
   }
+}
+
+// 从树节点删除用例
+const handleDeleteCaseFromTree = (node: any) => {
+  if (!projectId.value) {
+    message.warning('请先选择项目')
+    return
+  }
+  
+  // 从 key 中提取用例 ID（格式：case_xxx）
+  const nodeKey = node.key as string
+  const caseId = nodeKey.replace('case_', '')
+  const caseName = node.title || '该用例'
+  
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除用例"${caseName}"吗？`,
+    onOk: async () => {
+      try {
+        await testCaseApi.deleteTestCase(projectId.value!, caseId)
+        message.success('删除成功')
+        await loadTestCases()
+        await loadModuleTree()
+      } catch (error) {
+        console.error('Failed to delete case:', error)
+        message.error('删除失败')
+      }
+    }
+  })
 }
 
 const handleAddModule = (node: any) => {
@@ -1008,12 +1136,22 @@ const handleAddModule = (node: any) => {
 }
 
 const handleAddCase = (node: any) => {
-  // 右键新增用例：直接打开用例编辑弹窗，默认模块在弹窗内选择
+  // 右键新增用例：直接打开用例编辑弹窗，自动关联到选中的模块
   if (!projectId.value) {
     message.warning('请先选择项目')
     return
   }
+  
   editingCaseId.value = ''
+  
+  // 设置默认模块ID（如果不是虚拟节点）
+  const nodeKey = node?.key as string
+  if (nodeKey && nodeKey !== 'all' && nodeKey !== 'unplanned') {
+    defaultModuleId.value = nodeKey
+  } else {
+    defaultModuleId.value = ''
+  }
+  
   editCaseVisible.value = true
 }
 

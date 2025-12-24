@@ -178,25 +178,25 @@
                     @click="downloadAttachment(item.id)"
                     style="cursor: pointer"
                   >
-                    <template #cover>
-                      <img
-                        v-if="isImage(item.fileType)"
-                        :src="item.filePath"
-                        alt="附件"
-                        style="width: 100%; height: 120px; object-fit: cover"
-                      />
-                      <div v-else class="file-icon">
-                        <FileOutlined style="font-size: 48px; color: #1890ff" />
-                      </div>
-                    </template>
-                    <a-card-meta>
-                      <template #title>
-                        <div class="attachment-name">{{ item.fileName }}</div>
+                      <template #cover>
+                        <img
+                          v-if="isImage(item.fileType)"
+                          :src="item.filePath"
+                          alt="附件"
+                          style="width: 100%; height: 120px; object-fit: cover"
+                        />
+                        <div v-else class="file-icon">
+                          <FileOutlined style="font-size: 48px; color: #1890ff" />
+                        </div>
                       </template>
-                      <template #description>
-                        <div class="attachment-size">{{ formatFileSize(item.fileSize) }}</div>
-                      </template>
-                    </a-card-meta>
+                      <a-card-meta>
+                        <template #title>
+                          <div class="attachment-name">{{ item.fileName }}</div>
+                        </template>
+                        <template #description>
+                          <div class="attachment-size">{{ formatFileSize(item.fileSize) }}</div>
+                        </template>
+                      </a-card-meta>
                   </a-card>
                 </a-list-item>
               </template>

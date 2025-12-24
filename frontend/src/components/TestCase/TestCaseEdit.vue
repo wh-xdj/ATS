@@ -77,8 +77,9 @@
                   :tree-data="moduleTreeData"
                   placeholder="请选择模块"
                   style="width: 100%"
-                  :replace-fields="{ title: 'name', value: 'id', children: 'children' }"
+                  :field-names="{ label: 'name', value: 'id', children: 'children' }"
                   tree-default-expand-all
+                  allow-clear
                 />
               </a-form-item>
             </a-col>

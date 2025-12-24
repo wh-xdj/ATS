@@ -41,18 +41,17 @@
           @rightClick="handleModuleRightClick"
           @drop="handleModuleDrop"
         >
-          <template #title="{ title, count, nodeType, caseCode }">
-            <span>
+          <template #title="{ title, count, nodeType }">
+            <span class="tree-node-title">
               {{ title }}
               <span v-if="count !== undefined && nodeType !== 'case'" class="count-badge">({{ count }})</span>
-              <span v-if="caseCode" class="case-code-badge">{{ caseCode }}</span>
             </span>
           </template>
           <template #icon="{ nodeType, isLeaf }">
-            <FolderOutlined v-if="nodeType === 'module'" />
+            <FolderOutlined v-if="nodeType === 'module'" style="color: #faad14" />
             <FileTextOutlined v-else-if="nodeType === 'case'" style="color: #1890ff" />
             <FileOutlined v-else-if="isLeaf" />
-            <FolderOutlined v-else />
+            <FolderOutlined v-else style="color: #faad14" />
           </template>
         </a-tree>
 
@@ -133,6 +132,31 @@
             <a-button @click="loadTestCases">
               <template #icon><ReloadOutlined /></template>
             </a-button>
+            <a-popover
+              v-model:visible="columnSettingVisible"
+              trigger="click"
+              placement="bottomRight"
+              title="自定义列显示"
+            >
+              <template #content>
+                <div style="width: 200px;">
+                  <a-checkbox-group
+                    v-model:value="visibleColumnKeys"
+                    :options="columnOptions"
+                    style="display: flex; flex-direction: column; gap: 8px;"
+                  />
+                  <a-divider style="margin: 12px 0;" />
+                  <a-space>
+                    <a-button size="small" @click="resetColumnSettings">重置</a-button>
+                    <a-button size="small" type="primary" @click="saveColumnSettings">保存</a-button>
+                  </a-space>
+                </div>
+              </template>
+              <a-button>
+                <template #icon><SettingOutlined /></template>
+                列设置
+              </a-button>
+            </a-popover>
           </a-space>
         </div>
 
@@ -197,16 +221,18 @@
             :row-selection="rowSelection"
             :pagination="pagination"
             :row-key="record => record.id"
+            :scroll="{ x: 1500 }"
             @change="handleTableChange"
             size="middle"
+            :title="() => tableTitle"
           >
-            <template #bodyCell="{ column, record }">
+            <template #bodyCell="{ column, record, index }">
               <template v-if="column.key === 'id'">
-                {{ record.id }}
+                <a @click="handleViewCase(record)" class="case-link">{{ getCaseDisplayId(record, index) }}</a>
               </template>
               
               <template v-else-if="column.key === 'name'">
-                <a @click="handleViewCase(record)">{{ record.name }}</a>
+                <span :title="record.name">{{ record.name }}</span>
               </template>
               
               <template v-else-if="column.key === 'level'">
@@ -228,11 +254,14 @@
               </template>
               
               <template v-else-if="column.key === 'modulePath'">
-                {{ record.modulePath || (record.moduleId ? '' : '未规划用例') }}
+                <span :title="getModuleName(record.moduleId) || '未规划用例'">
+                  {{ getModuleName(record.moduleId) || '未规划用例' }}
+                </span>
               </template>
               
               <template v-else-if="column.key === 'tags'">
-                <a-space>
+                <span v-if="(record.tags || []).length === 0">-</span>
+                <a-space v-else wrap :size="2">
                   <a-tag v-for="tag in (record.tags || []).slice(0, 2)" :key="tag" size="small">
                     {{ tag }}
                   </a-tag>
@@ -242,12 +271,20 @@
                 </a-space>
               </template>
               
+              <template v-else-if="column.key === 'createdBy'">
+                {{ getDisplayName(record.createdBy) }}
+              </template>
+              
+              <template v-else-if="column.key === 'createdAt'">
+                {{ formatDateTime(record.createdAt) }}
+              </template>
+              
               <template v-else-if="column.key === 'updatedBy'">
-                {{ record.updatedBy || record.createdBy || 'Administrator' }}
+                {{ getDisplayName(record.updatedBy || record.createdBy) }}
               </template>
               
               <template v-else-if="column.key === 'updatedAt'">
-                {{ formatDate(record.updatedAt) }}
+                {{ formatDateTime(record.updatedAt) }}
               </template>
               
               <template v-else-if="column.key === 'actions'">
@@ -356,19 +393,22 @@ import {
   DownOutlined,
   FolderOutlined,
   FileOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  SettingOutlined
 } from '@ant-design/icons-vue'
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'
 import ImportCasesModal from '@/components/TestCase/ImportCasesModal.vue'
 import { testCaseApi } from '@/api/testCase'
 import { projectApi } from '@/api/project'
 import { useProjectStore } from '@/stores/project'
+import { useUserStore } from '@/stores/user'
 import type { TestCase, Project } from '@/types'
 import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
+const userStore = useUserStore()
 
 // 当前项目 ID：优先使用 store，其次使用已有项目列表的第一个
 const projects = computed<Project[]>(() => projectStore.projects)
@@ -439,6 +479,19 @@ const contextMenuNodeType = computed(() => {
   return 'module'
 })
 
+// 表格标题（自定义title信息）
+const tableTitle = computed(() => {
+  const selectedModule = selectedModuleKeys.value[0]
+  if (!selectedModule || selectedModule === 'all') {
+    return `全部用例 (${pagination.total})`
+  }
+  const module = findModuleById(selectedModule)
+  if (module) {
+    return `${module.name} (${pagination.total})`
+  }
+  return `用例列表 (${pagination.total})`
+})
+
 // 右侧表格
 const loading = ref(false)
 const testCases = ref<TestCase[]>([])
@@ -465,21 +518,25 @@ const pagination = reactive({
   showTotal: (total: number) => `共 ${total} 条`
 })
 
-// 表格列定义
-const columns = [
+// 所有可用的表格列定义
+const allColumns = [
   {
     title: 'ID',
     dataIndex: 'id',
     key: 'id',
-    width: 100,
-    sorter: true
+    width: 120,
+    sorter: true,
+    ellipsis: true,
+    defaultVisible: true
   },
   {
     title: '用例名称',
     dataIndex: 'name',
     key: 'name',
-    width: 200,
-    sorter: true
+    width: 250,
+    sorter: true,
+    ellipsis: true,
+    defaultVisible: true
   },
   {
     title: '用例等级',
@@ -491,65 +548,149 @@ const columns = [
       { text: 'P1', value: 'P1' },
       { text: 'P2', value: 'P2' },
       { text: 'P3', value: 'P3' }
-    ]
+    ],
+    defaultVisible: true
   },
   {
     title: '评审结果',
     dataIndex: 'reviewResult',
     key: 'reviewResult',
-    width: 120,
+    width: 100,
     filters: [
       { text: '未评审', value: 'not_reviewed' },
       { text: '已通过', value: 'passed' },
       { text: '不通过', value: 'rejected' },
       { text: '重新提审', value: 'resubmit' }
-    ]
+    ],
+    defaultVisible: true
   },
   {
     title: '执行结果',
     dataIndex: 'status',
     key: 'executionResult',
-    width: 120,
+    width: 100,
     filters: [
       { text: '未执行', value: 'not_executed' },
       { text: '成功', value: 'passed' },
       { text: '失败', value: 'failed' },
       { text: '阻塞', value: 'blocked' },
       { text: '跳过', value: 'skipped' }
-    ]
+    ],
+    defaultVisible: true
   },
   {
     title: '所属模块',
     dataIndex: 'modulePath',
     key: 'modulePath',
-    width: 200
+    width: 150,
+    ellipsis: true,
+    defaultVisible: true
   },
   {
     title: '标签',
     dataIndex: 'tags',
     key: 'tags',
-    width: 150
+    width: 120,
+    ellipsis: true,
+    defaultVisible: false
+  },
+  {
+    title: '创建人',
+    dataIndex: 'createdByName',
+    key: 'createdBy',
+    width: 100,
+    ellipsis: true,
+    defaultVisible: false
+  },
+  {
+    title: '创建时间',
+    dataIndex: 'createdAt',
+    key: 'createdAt',
+    width: 160,
+    sorter: true,
+    defaultVisible: false
   },
   {
     title: '更新人',
-    dataIndex: 'updatedBy',
+    dataIndex: 'updatedByName',
     key: 'updatedBy',
-    width: 120
+    width: 100,
+    ellipsis: true,
+    defaultVisible: true
   },
   {
     title: '更新时间',
     dataIndex: 'updatedAt',
     key: 'updatedAt',
-    width: 150,
-    sorter: true
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 150,
-    fixed: 'right' as const
+    width: 160,
+    sorter: true,
+    defaultVisible: true
   }
 ]
+
+// 操作列（始终显示）
+const actionColumn = {
+  title: '操作',
+  key: 'actions',
+  width: 150,
+  fixed: 'right' as const
+}
+
+// 可选列的 key 列表（用于复选框）
+const columnOptions = allColumns.map(col => ({
+  label: col.title,
+  value: col.key
+}))
+
+// 当前选中显示的列（从 localStorage 读取或使用默认值）
+const getInitialVisibleColumns = () => {
+  const saved = localStorage.getItem('testCaseVisibleColumns')
+  if (saved) {
+    try {
+      return JSON.parse(saved)
+    } catch {
+      return allColumns.filter(col => col.defaultVisible).map(col => col.key)
+    }
+  }
+  return allColumns.filter(col => col.defaultVisible).map(col => col.key)
+}
+
+const visibleColumnKeys = ref<string[]>(getInitialVisibleColumns())
+
+// 列设置弹窗可见性
+const columnSettingVisible = ref(false)
+
+// 动态计算显示的列
+const columns = computed(() => {
+  const visibleCols = allColumns.filter(col => visibleColumnKeys.value.includes(col.key))
+  return [...visibleCols, actionColumn]
+})
+
+// 保存列设置
+const saveColumnSettings = () => {
+  localStorage.setItem('testCaseVisibleColumns', JSON.stringify(visibleColumnKeys.value))
+  columnSettingVisible.value = false
+  message.success('列设置已保存')
+}
+
+// 重置列设置
+const resetColumnSettings = () => {
+  visibleColumnKeys.value = allColumns.filter(col => col.defaultVisible).map(col => col.key)
+  localStorage.removeItem('testCaseVisibleColumns')
+  message.success('已重置为默认列')
+}
+
+// 生成用例显示ID
+const getCaseDisplayId = (record: TestCase, index: number) => {
+  // 优先使用 caseCode
+  if (record.caseCode) {
+    return record.caseCode
+  }
+  // 否则生成序号格式（001, 002, ...）
+  const pageOffset = (pagination.current - 1) * pagination.pageSize
+  const num = pageOffset + index + 1
+  return num.toString().padStart(3, '0')
+}
 
 // 行选择配置
 const rowSelection = computed(() => ({
@@ -580,17 +721,19 @@ const loadModuleTree = async () => {
   if (!projectId.value) return
   try {
     const response = await projectApi.getModules(projectId.value)
-    modules.value = response
-    const treeData = buildModuleTree(response)
+    // 新的响应格式包含 modules 和 totalCaseCount
+    const moduleList = response.modules || response
+    const totalCaseCount = response.totalCaseCount ?? 0
     
-    // 添加"全部用例"节点
-    const allCasesCount = testCases.value.length
+    modules.value = moduleList
+    const treeData = buildModuleTree(moduleList)
     
+    // 添加"全部用例"节点，使用后端返回的总数
     moduleTreeData.value = [
       {
         title: '全部用例',
         key: 'all',
-        count: allCasesCount,
+        count: totalCaseCount,
         isLeaf: true
       },
       ...treeData
@@ -605,15 +748,15 @@ const buildModuleTree = (modules: any[]): any[] => {
   const treeMap = new Map()
   const treeData: any[] = []
 
-  // 第一步：构建模块节点
+  // 第一步：构建模块节点，使用后端返回的 caseCount
   modules.forEach(module => {
-    const moduleCases = testCases.value.filter(c => c.moduleId === module.id)
     treeMap.set(module.id, {
       title: module.name,
       key: module.id,
-      count: moduleCases.length,
+      directCount: module.caseCount || 0,  // 从后端获取的直接用例数
+      count: 0,  // 总用例数（包含子模块），稍后计算
       isLeaf: false,
-      nodeType: 'module',  // 标识节点类型
+      nodeType: 'module',
       children: [],
       raw: module
     })
@@ -629,7 +772,7 @@ const buildModuleTree = (modules: any[]): any[] => {
     }
   })
 
-  // 第三步：将用例添加到对应模块下
+  // 第三步：将用例添加到对应模块下（用于树中显示用例节点）
   modules.forEach(module => {
     const moduleCases = testCases.value.filter(c => c.moduleId === module.id)
     const moduleNode = treeMap.get(module.id)
@@ -637,9 +780,9 @@ const buildModuleTree = (modules: any[]): any[] => {
     moduleCases.forEach(tc => {
       moduleNode.children.push({
         title: tc.name,
-        key: `case_${tc.id}`,  // 用例key加前缀区分
+        key: `case_${tc.id}`,
         isLeaf: true,
-        nodeType: 'case',  // 标识节点类型
+        nodeType: 'case',
         caseId: tc.id,
         caseCode: tc.caseCode,
         priority: tc.priority,
@@ -648,6 +791,22 @@ const buildModuleTree = (modules: any[]): any[] => {
     })
   })
 
+  // 第四步：递归计算每个模块的总用例数（包含所有子模块）
+  const calculateTotalCount = (node: any): number => {
+    let total = node.directCount || 0
+    if (node.children) {
+      node.children.forEach((child: any) => {
+        if (child.nodeType === 'module') {
+          total += calculateTotalCount(child)
+        }
+      })
+    }
+    node.count = total
+    return total
+  }
+
+  treeData.forEach(node => calculateTotalCount(node))
+
   return treeData
 }
 
@@ -655,7 +814,8 @@ const rebuildFlatModuleKeys = () => {
   const result: string[] = []
   const traverse = (nodes: any[]) => {
     nodes.forEach(node => {
-      if (node.key !== 'all' && node.key !== 'unplanned' && node.nodeType === 'module') {
+      // 包含模块和用例节点，但排除虚拟节点
+      if (node.key !== 'all' && node.key !== 'unplanned') {
         result.push(node.key)
       }
       if (node.children && node.children.length > 0) {
@@ -740,14 +900,15 @@ const loadTestCases = async () => {
   }
 }
 
-// 处理模块选择（支持 Shift + 左键 批量选择）
+// 处理模块/用例选择（支持 Shift + 左键 批量选择）
 const handleModuleSelect = (keys: string[], info: any) => {
   moduleContextMenu.visible = false
   const currentKey = info?.node?.key as string | undefined
+  const currentNodeType = info?.node?.nodeType as string | undefined
 
-  // 排除虚拟节点（'all' 和 'unplanned'）不参与范围选择
-  const isVirtualNode = currentKey === 'all' || currentKey === 'unplanned'
-  const lastKeyIsVirtual = lastSelectedModuleKey.value === 'all' || lastSelectedModuleKey.value === 'unplanned'
+  // 排除虚拟节点（'all'）不参与范围选择
+  const isVirtualNode = currentKey === 'all'
+  const lastKeyIsVirtual = lastSelectedModuleKey.value === 'all'
 
   // 如果按住了 Shift 键，且之前有选中的节点，且都不是虚拟节点，则进行范围选择
   if (isShiftKeyPressed.value && lastSelectedModuleKey.value && currentKey && !isVirtualNode && !lastKeyIsVirtual) {
@@ -779,8 +940,12 @@ const handleModuleSelect = (keys: string[], info: any) => {
     }
   }
 
-  pagination.current = 1
-  loadTestCases()
+  // 只有选择模块或"全部用例"时才加载用例列表
+  // 如果选择的是用例节点，不重新加载列表
+  if (currentNodeType !== 'case') {
+    pagination.current = 1
+    loadTestCases()
+  }
 }
 
 const handleModuleExpand = (keys: string[]) => {
@@ -835,6 +1000,7 @@ const handleEditCase = (record: TestCase) => {
 
 // 查看用例
 const handleViewCase = (record: TestCase) => {
+  // 打开用例编辑弹窗（不跳转路由，避免 404）
   editingCaseId.value = record.id
   editCaseVisible.value = true
 }
@@ -868,17 +1034,18 @@ const handleDeleteCase = async (record: TestCase) => {
 const handleCopyCase = async (record: TestCase) => {
   try {
     const originalCase = await testCaseApi.getTestCase(projectId.value, record.id)
+    // 后端期望 snake_case 字段名
     const newCaseData: any = {
       name: `${originalCase.name} (副本)`,
       type: originalCase.type,
       priority: originalCase.priority,
       precondition: originalCase.precondition,
       steps: originalCase.steps,
-      expectedResult: originalCase.expectedResult,
-      requirementRef: originalCase.requirementRef,
-      modulePath: originalCase.modulePath,
-      moduleId: originalCase.moduleId,
-      executorId: originalCase.executorId,
+      expected_result: originalCase.expectedResult,  // snake_case
+      requirement_ref: originalCase.requirementRef,  // snake_case
+      module_path: originalCase.modulePath,          // snake_case
+      module_id: originalCase.moduleId,              // snake_case
+      executor_id: originalCase.executorId,          // snake_case
       tags: originalCase.tags,
       level: originalCase.level,
     }
@@ -971,9 +1138,29 @@ const hideModuleContextMenu = () => {
 
 const handleModuleRightClick = (info: any) => {
   const { event, node } = info
+  event.preventDefault()
+  
+  // 使用 clientX/clientY 配合 fixed 定位，确保菜单显示在鼠标右侧
+  const menuWidth = 150  // 菜单预估宽度
+  const menuHeight = 200 // 菜单预估高度
+  
+  // 检查是否会超出屏幕边界
+  let x = event.clientX
+  let y = event.clientY
+  
+  // 如果菜单会超出右边界，则显示在鼠标左侧
+  if (x + menuWidth > window.innerWidth) {
+    x = x - menuWidth
+  }
+  
+  // 如果菜单会超出下边界，则向上调整
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 10
+  }
+  
   moduleContextMenu.visible = true
-  moduleContextMenu.x = event.pageX
-  moduleContextMenu.y = event.pageY
+  moduleContextMenu.x = x
+  moduleContextMenu.y = y
   moduleContextMenu.node = node
 
   const key = node.key as string
@@ -1006,40 +1193,89 @@ const handleModuleDrop = async (info: any) => {
   const dropKey = info.node?.key as string
 
   if (!projectId.value || !dragKey || !dropKey) return
-  if (dragKey === 'all' || dragKey === 'unplanned') return
-  if (dropKey === 'all' || dropKey === 'unplanned') return
+  if (dragKey === 'all') return
+  if (dropKey === 'all') return
 
-  const dragModule = findModuleById(dragKey)
-  if (!dragModule) return
+  // 判断是否是用例节点（key 以 case_ 开头）
+  const isDragCase = dragKey.startsWith('case_')
+  const isDropCase = dropKey.startsWith('case_')
 
-  let newParentId: string | undefined
-  if (info.dropToGap) {
-    // 落在两个节点之间，保持与目标节点相同的父级
-    const dropModule = findModuleById(dropKey)
-    newParentId = dropModule?.parentId
-  } else {
-    // 落在节点上，变为该节点的子模块
-    newParentId = dropKey
-  }
+  if (isDragCase) {
+    // 拖动的是用例，需要移动到目标模块
+    const caseId = dragKey.replace('case_', '')
+    let targetModuleId: string | null = null
 
-  try {
-    await projectApi.updateModule(projectId.value, dragKey, {
-      name: dragModule.name,
-      parentId: newParentId,
-      sortOrder: dragModule.sortOrder ?? 1,
-      description: dragModule.description
-    })
-    message.success('模块已移动')
-    
-    // 自动展开新的父模块
-    if (newParentId && !expandedModuleKeys.value.includes(newParentId)) {
-      expandedModuleKeys.value = [...expandedModuleKeys.value, newParentId]
+    if (isDropCase) {
+      // 放到另一个用例上，获取该用例的模块 ID
+      const dropCaseId = dropKey.replace('case_', '')
+      const dropCase = testCases.value.find(c => c.id === dropCaseId)
+      targetModuleId = dropCase?.moduleId || null
+    } else {
+      // 放到模块上
+      targetModuleId = dropKey
     }
-    
-    await loadModuleTree()
-  } catch (error) {
-    console.error('Failed to move module:', error)
-    message.error('移动模块失败')
+
+    try {
+      // 更新用例的 module_id
+      await testCaseApi.updateTestCase(projectId.value, caseId, {
+        module_id: targetModuleId
+      })
+      message.success('用例已移动')
+      
+      // 自动展开目标模块
+      if (targetModuleId && !expandedModuleKeys.value.includes(targetModuleId)) {
+        expandedModuleKeys.value = [...expandedModuleKeys.value, targetModuleId]
+      }
+      
+      await loadTestCases()
+      await loadModuleTree()
+    } catch (error) {
+      console.error('Failed to move test case:', error)
+      message.error('移动用例失败')
+    }
+  } else {
+    // 拖动的是模块
+    const dragModule = findModuleById(dragKey)
+    if (!dragModule) return
+
+    let newParentId: string | undefined
+    if (info.dropToGap) {
+      // 落在两个节点之间，保持与目标节点相同的父级
+      const dropModule = findModuleById(dropKey)
+      newParentId = dropModule?.parentId
+    } else {
+      // 落在节点上，变为该节点的子模块
+      // 如果目标是用例，则获取用例的模块作为新父级
+      if (isDropCase) {
+        const dropCaseId = dropKey.replace('case_', '')
+        const dropCase = testCases.value.find(c => c.id === dropCaseId)
+        newParentId = dropCase?.moduleId
+      } else {
+        newParentId = dropKey
+      }
+    }
+
+    try {
+      await projectApi.updateModule(projectId.value, dragKey, {
+        name: dragModule.name,
+        parentId: newParentId,
+        sortOrder: dragModule.sortOrder ?? 1,
+        description: dragModule.description
+      })
+      message.success('模块已移动')
+      
+      // 自动展开新的父模块
+      if (newParentId && !expandedModuleKeys.value.includes(newParentId)) {
+        expandedModuleKeys.value = [...expandedModuleKeys.value, newParentId]
+      }
+      
+      // 刷新用例和模块树以更新用例数量
+      await loadTestCases()
+      await loadModuleTree()
+    } catch (error) {
+      console.error('Failed to move module:', error)
+      message.error('移动模块失败')
+    }
   }
 }
 
@@ -1322,7 +1558,35 @@ const getExecutionResultLabel = (status: string) => {
 }
 
 const formatDate = (date: string) => {
+  if (!date) return '-'
   return dayjs(date).format('YYYY-MM-DD')
+}
+
+// 格式化日期时间（包含时分秒）
+const formatDateTime = (date: string) => {
+  if (!date) return '-'
+  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 获取显示名称（将用户ID转换为显示名称）
+const getDisplayName = (userId: string) => {
+  if (!userId) return '-'
+  // 如果是当前登录用户，显示当前用户名
+  if (userStore.user?.id === userId) {
+    return userStore.user.username || userStore.user.email || '当前用户'
+  }
+  // 其他情况显示简短ID或默认名称
+  return userId.length > 8 ? userId.substring(0, 8) + '...' : userId
+}
+
+// 根据模块ID获取模块名称
+const getModuleName = (moduleId: string | null | undefined): string => {
+  if (!moduleId) return ''
+  const module = findModuleById(moduleId)
+  if (module) {
+    return module.name
+  }
+  return ''
 }
 
 // 生命周期
@@ -1393,6 +1657,80 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
+/* 树节点标题样式 - 单行显示 */
+.tree-node-title {
+  display: inline-block;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  text-align: left;
+}
+
+/* 树容器横向滚动 */
+.module-tree-sider :deep(.ant-tree) {
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.module-tree-sider :deep(.ant-tree-treenode) {
+  white-space: nowrap;
+  display: flex !important;
+  align-items: center;
+}
+
+.module-tree-sider :deep(.ant-tree-node-content-wrapper) {
+  display: inline-flex !important;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 用例节点样式 */
+.module-tree-sider :deep(.ant-tree-title) {
+  display: inline-block;
+  text-align: left;
+  width: 100%;
+}
+
+/* 右键菜单样式 - Windows 风格 */
+.module-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12), 
+              0 6px 16px 0 rgba(0, 0, 0, 0.08), 
+              0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  padding: 4px 0;
+  min-width: 140px;
+}
+
+.module-context-menu :deep(.ant-menu) {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.module-context-menu :deep(.ant-menu-item) {
+  height: 32px;
+  line-height: 32px;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  border-radius: 0;
+}
+
+.module-context-menu :deep(.ant-menu-item:hover) {
+  background-color: #f5f5f5;
+}
+
+.module-context-menu :deep(.ant-menu-item-divider) {
+  margin: 4px 0;
+  background-color: #f0f0f0;
+}
+
   .cases-content {
   background: #fff;
   margin: 0;
@@ -1415,7 +1753,24 @@ onUnmounted(() => {
   
 .table-card {
   margin-bottom: 16px;
-  }
+}
+
+/* 表格单行显示，不换行 */
+.table-card :deep(.ant-table-cell) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 用例链接样式 */
+.case-link {
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.case-link:hover {
+  text-decoration: underline;
+}
   
 .batch-actions {
   position: sticky;

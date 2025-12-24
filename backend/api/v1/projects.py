@@ -1,14 +1,18 @@
+# -*- coding: utf-8 -*-
 """项目相关API"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import Project
-from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse
 from schemas.test_case import TestCaseCreate, TestCaseUpdate, TestCaseResponse
+from schemas.module import ModuleCreate, ModuleUpdate
 from schemas.common import APIResponse, ResponseStatus
 from api.deps import get_current_user
 from models import User
+from utils.serializer import serialize_model, serialize_list
+from services.module_service import ModuleService
 
 router = APIRouter()
 
@@ -18,36 +22,18 @@ async def get_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取项目列表"""
-    # TODO: 从数据库获取真实数据
-    # 目前返回模拟数据
-    projects = [
-        {
-            "id": "project_1",
-            "name": "项目A",
-            "description": "这是项目A的描述",
-            "ownerId": str(current_user.id) if current_user else "user_1",
-            "status": "active",
-            "createdAt": "2024-01-01T00:00:00",
-            "updatedAt": "2024-01-01T00:00:00",
-            "createdBy": str(current_user.id) if current_user else "user_1"
-        },
-        {
-            "id": "project_2",
-            "name": "项目B",
-            "description": "这是项目B的描述",
-            "ownerId": str(current_user.id) if current_user else "user_1",
-            "status": "active",
-            "createdAt": "2024-01-02T00:00:00",
-            "updatedAt": "2024-01-02T00:00:00",
-            "createdBy": str(current_user.id) if current_user else "user_1"
-        }
-    ]
+    """获取项目列表（使用数据库持久化）"""
+    # 查询所有项目，按创建时间倒序
+    query = db.query(Project).order_by(Project.created_at.desc())
+    items = query.all()
+
+    # 使用序列化器统一转换为camelCase
+    project_list = serialize_list(items, camel_case=True)
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=projects
+        data=project_list,
     )
 
 
@@ -57,23 +43,18 @@ async def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取项目详情"""
-    # TODO: 从数据库获取真实数据
-    project = {
-        "id": str(project_id),
-        "name": "项目详情",
-        "description": "这是项目的详细描述",
-        "ownerId": str(current_user.id) if current_user else "user_1",
-        "status": "active",
-        "createdAt": "2024-01-01T00:00:00",
-        "updatedAt": "2024-01-01T00:00:00",
-        "createdBy": str(current_user.id) if current_user else "user_1"
-    }
+    """获取项目详情（数据库）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+
+    # 使用序列化器统一转换为camelCase
+    data = serialize_model(project, camel_case=True)
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=project
+        data=data,
     )
 
 
@@ -83,24 +64,36 @@ async def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """创建项目"""
-    # 使用当前登录用户的 ID 作为 owner_id（如果未提供）
-    owner_id = project_data.owner_id if project_data.owner_id else current_user.id
-    
-    # TODO: 实现真实的创建逻辑
+    """创建项目（写入数据库）"""
+    owner_id = str(project_data.owner_id) if project_data.owner_id else str(current_user.id)
+
+    project = Project(
+        name=project_data.name,
+        description=project_data.description,
+        owner_id=owner_id,
+        status="active",
+        created_by=str(current_user.id),
+    )
+
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+
+    data = {
+        "id": project.id,
+        "name": project.name,
+        "description": project.description,
+        "ownerId": project.owner_id,
+        "status": project.status,
+        "createdAt": project.created_at.isoformat() if project.created_at else "",
+        "updatedAt": project.updated_at.isoformat() if project.updated_at else "",
+        "createdBy": project.created_by or project.owner_id,
+    }
+
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="创建成功",
-        data={
-            "id": "project_new",
-            "name": project_data.name,
-            "description": project_data.description,
-            "ownerId": str(owner_id),
-            "status": "active",
-            "createdAt": "2024-01-01T00:00:00",
-            "updatedAt": "2024-01-01T00:00:00",
-            "createdBy": str(current_user.id) if current_user else "user_1"
-        }
+        data=data,
     )
 
 
@@ -111,17 +104,36 @@ async def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """更新项目"""
-    # TODO: 实现真实的更新逻辑
+    """更新项目（数据库）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+
+    if project_data.name is not None:
+        project.name = project_data.name
+    if project_data.description is not None:
+        project.description = project_data.description
+    if project_data.status is not None:
+        project.status = project_data.status
+
+    db.commit()
+    db.refresh(project)
+
+    data = {
+        "id": project.id,
+        "name": project.name,
+        "description": project.description,
+        "ownerId": project.owner_id,
+        "status": project.status,
+        "createdAt": project.created_at.isoformat() if project.created_at else "",
+        "updatedAt": project.updated_at.isoformat() if project.updated_at else "",
+        "createdBy": project.created_by or project.owner_id,
+    }
+
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="更新成功",
-        data={
-            "id": str(project_id),
-            "name": project_data.name or "项目名称",
-            "description": project_data.description,
-            "status": project_data.status or "active"
-        }
+        data=data,
     )
 
 
@@ -131,11 +143,17 @@ async def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """删除项目"""
-    # TODO: 实现真实的删除逻辑
+    """删除项目（数据库，级联删除测试用例等）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+
+    db.delete(project)
+    db.commit()
+
     return APIResponse(
         status=ResponseStatus.SUCCESS,
-        message="删除成功"
+        message="删除成功",
     )
 
 
@@ -145,49 +163,88 @@ async def get_project_modules(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取项目模块列表"""
-    # TODO: 从数据库获取真实数据
-    # 目前返回模拟数据
-    modules = [
-        {
-            "id": "module_1",
-            "projectId": str(project_id),
-            "name": "模块A",
-            "parentId": None,
-            "level": 1,
-            "sortOrder": 0,
-            "description": "模块A的描述",
-            "createdAt": "2024-01-01T00:00:00",
-            "updatedAt": "2024-01-01T00:00:00"
-        },
-        {
-            "id": "module_2",
-            "projectId": str(project_id),
-            "name": "模块B",
-            "parentId": None,
-            "level": 1,
-            "sortOrder": 1,
-            "description": "模块B的描述",
-            "createdAt": "2024-01-01T00:00:00",
-            "updatedAt": "2024-01-01T00:00:00"
-        },
-        {
-            "id": "module_3",
-            "projectId": str(project_id),
-            "name": "子模块A-1",
-            "parentId": "module_1",
-            "level": 2,
-            "sortOrder": 0,
-            "description": "子模块A-1的描述",
-            "createdAt": "2024-01-01T00:00:00",
-            "updatedAt": "2024-01-01T00:00:00"
-        }
-    ]
+    """获取项目模块列表（数据库持久化）"""
+    modules = ModuleService.get_modules(db, project_id)
+    
+    # 序列化为 camelCase
+    module_list = serialize_list(modules, camel_case=True)
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=modules
+        data=module_list
+    )
+
+
+@router.post("/{project_id}/modules", response_model=APIResponse)
+async def create_module(
+    project_id: str,
+    module_data: ModuleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """创建模块（数据库持久化）"""
+    try:
+        module = ModuleService.create_module(
+            db=db,
+            project_id=project_id,
+            module_data=module_data,
+            current_user_id=str(current_user.id)
+        )
+        
+        return APIResponse(
+            status=ResponseStatus.SUCCESS,
+            message="创建成功",
+            data=serialize_model(module, camel_case=True)
+        )
+    except Exception as e:
+        import traceback
+        print("创建模块失败:", traceback.format_exc())
+        raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
+
+
+@router.put("/{project_id}/modules/{module_id}", response_model=APIResponse)
+async def update_module(
+    project_id: str,
+    module_id: str,
+    module_data: ModuleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更新模块（数据库持久化）"""
+    module = ModuleService.update_module(
+        db=db,
+        module_id=module_id,
+        module_data=module_data,
+        current_user_id=str(current_user.id)
+    )
+    
+    if not module:
+        raise HTTPException(status_code=404, detail="模块不存在")
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="更新成功",
+        data=serialize_model(module, camel_case=True)
+    )
+
+
+@router.delete("/{project_id}/modules/{module_id}", response_model=APIResponse)
+async def delete_module(
+    project_id: str,
+    module_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """删除模块（数据库持久化）"""
+    success = ModuleService.delete_module(db=db, module_id=module_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="模块不存在")
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="删除成功"
     )
 
 

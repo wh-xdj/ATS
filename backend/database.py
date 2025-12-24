@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """数据库连接和会话管理"""
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base

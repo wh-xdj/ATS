@@ -1,0 +1,108 @@
+# ==================================
+# ATS 项目根目录 .gitignore
+# ==================================
+
+# ==================
+# OS 系统文件
+# ==================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ==================
+# IDE / 编辑器
+# ==================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# ==================
+# 日志文件
+# ==================
+*.log
+logs/
+
+# ==================
+# 临时文件
+# ==================
+*.tmp
+*.temp
+*.bak
+tmp/
+temp/
+
+# ==================
+# 环境变量
+# ==================
+.env
+.env.local
+.env.*.local
+
+# ==================
+# 文档生成
+# ==================
+docs/_build/
+site/
+
+# ==================
+# 压缩包
+# ==================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ==================
+# 前端相关
+# ==================
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+frontend/.vite/
+
+# ==================
+# 后端相关
+# ==================
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/**/*.pyc
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/uv.lock
+backend/uploads/
+
+# ==================
+# 数据库
+# ==================
+*.db
+*.sqlite
+*.sqlite3
+
+# ==================
+# Docker
+# ==================
+docker-compose.override.yml
+
+# ==================
+# 测试报告
+# ==================
+coverage/
+htmlcov/
+.coverage
+*.cover
+

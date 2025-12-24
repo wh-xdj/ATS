@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """数据模型模块"""
 from database import Base
 from .user import User

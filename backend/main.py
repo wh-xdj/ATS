@@ -1,6 +1,8 @@
 """FastAPI应用入口"""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from config import settings
 from database import engine, Base
 from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions
@@ -30,6 +32,30 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# 添加验证错误处理器，显示详细的验证错误信息
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """处理请求验证错误，返回详细的错误信息"""
+    errors = []
+    for error in exc.errors():
+        field = " -> ".join(str(loc) for loc in error["loc"])
+        errors.append({
+            "field": field,
+            "message": error["msg"],
+            "type": error["type"],
+            "input": error.get("input")
+        })
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "status": "error",
+            "message": "请求数据验证失败",
+            "errors": errors,
+            "detail": str(exc)
+        }
 )
 
 # 注册路由

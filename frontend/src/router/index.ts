@@ -56,6 +56,15 @@ const routes = [
         }
       },
       {
+        path: 'test-plans/:projectName/:planName',
+        name: 'PlanExecution',
+        component: () => import('@views/PlanExecution.vue'),
+        meta: {
+          title: '计划执行',
+          icon: 'PlayCircleOutlined'
+        }
+      },
+      {
         path: 'executions',
         name: 'Executions',
         component: () => import('@views/Executions.vue'),

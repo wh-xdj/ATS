@@ -560,12 +560,35 @@ const handleSubmit = async () => {
     
     saving.value = true
     
-    const submitData = {
-      ...formData,
-      startDate: formData.startDate?.toISOString(),
-      endDate: formData.endDate?.toISOString(),
+    // 构建提交数据，确保字段格式正确
+    const submitData: any = {
+      name: formData.name,
+      planType: formData.planType,
+      description: formData.description || '',
+      notes: formData.notes || '',
+      startDate: formData.startDate ? formData.startDate.toISOString() : null,
+      endDate: formData.endDate ? formData.endDate.toISOString() : null,
+      environmentId: formData.environmentId || null,
+      environmentConfig: formData.environmentConfig || {},
+      executionStrategy: formData.executionStrategy || 'sequential',
+      retryOnFailure: formData.retryOnFailure || false,
+      retryCount: formData.retryCount || 2,
+      notificationMethods: formData.notificationMethods || [],
+      notificationRecipients: formData.notificationRecipients || [],
+      notificationEvents: formData.notificationEvents || [],
       testCaseIds: selectedCases.value.map(c => c.id)
     }
+
+    // 移除空值字段
+    Object.keys(submitData).forEach(key => {
+      if (submitData[key] === null || submitData[key] === undefined || submitData[key] === '') {
+        if (key !== 'description' && key !== 'notes' && key !== 'testCaseIds') {
+          delete submitData[key]
+        }
+      }
+    })
+
+    console.log('提交数据:', submitData)
 
     let plan
     if (isEditMode.value) {
@@ -576,13 +599,10 @@ const handleSubmit = async () => {
 
     message.success(isEditMode.value ? '更新成功' : '创建成功')
     emit('save', plan)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to save plan:', error)
-    if (error instanceof Error && error.message) {
-      message.error(error.message)
-    } else {
-      message.error(isEditMode.value ? '更新失败' : '创建失败')
-    }
+    const errorMessage = error?.response?.data?.detail || error?.message || (isEditMode.value ? '更新失败' : '创建失败')
+    message.error(errorMessage)
   } finally {
     saving.value = false
   }

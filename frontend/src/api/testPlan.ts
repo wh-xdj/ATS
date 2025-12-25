@@ -117,5 +117,26 @@ export const testPlanApi = {
   // 删除计划（兼容命名）
   deletePlan: async (planId: string) => {
     return apiClient.delete(`/test-plans/${planId}`)
+  },
+
+  // 更新用例执行状态
+  updateCaseExecutionStatus: async (
+    planId: string,
+    caseId: string,
+    status: string
+  ) => {
+    return apiClient.put(`/test-plans/${planId}/cases/${caseId}/status`, {
+      status
+    })
+  },
+
+  // 批量更新用例执行状态
+  batchUpdateCaseExecutionStatus: async (
+    planId: string,
+    updates: Array<{ caseId: string; status: string }>
+  ) => {
+    return apiClient.put(`/test-plans/${planId}/cases/status`, {
+      updates
+    })
   }
 }

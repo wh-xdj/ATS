@@ -99,13 +99,22 @@
           :loading="loading"
           :pagination="pagination"
           :row-key="record => record.id"
+          :scroll="{ x: 1200 }"
           @change="handleTableChange"
+          size="middle"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
-              <a @click="viewPlanDetail(record.id)" class="plan-name-link">
+              <a 
+                v-if="record.status !== 'not_started'"
+                @click="viewPlanExecution(record)" 
+                class="plan-name-link"
+              >
                 {{ record.name }}
               </a>
+              <span v-else class="plan-name-disabled">
+                {{ record.name }}
+              </span>
               <div class="plan-subtitle">
                 {{ record.planNumber }}
               </div>
@@ -124,13 +133,16 @@
             </template>
 
             <template v-else-if="column.key === 'progress'">
-              <a-progress
-                :percent="getProgressPercent(record)"
-                size="small"
-                :status="getProgressStatus(record)"
-              />
-              <div class="progress-text">
-                {{ record.executedCases || 0 }}/{{ record.totalCases || 0 }}
+              <div class="progress-wrapper" @click="viewPlanDetail(record.id)">
+                <a-progress
+                  :percent="getProgressPercent(record)"
+                  size="small"
+                  :status="getProgressStatus(record)"
+                  style="cursor: pointer"
+                />
+                <div class="progress-text">
+                  {{ record.executedCases || 0 }}/{{ record.totalCases || 0 }}
+                </div>
               </div>
             </template>
 
@@ -139,6 +151,10 @@
               <div v-if="record.endDate" class="date-range">
                 至 {{ formatDate(record.endDate) }}
               </div>
+            </template>
+
+            <template v-else-if="column.key === 'createdAt'">
+              <div>{{ formatDateTime(record.createdAt) }}</div>
             </template>
 
             <template v-else-if="column.key === 'actions'">
@@ -234,7 +250,11 @@
       :confirm-loading="executing"
     >
       <a-form layout="vertical">
-        <a-form-item label="执行环境">
+        <a-form-item 
+          v-if="selectedPlan && selectedPlan.planType !== 'manual'"
+          label="执行环境"
+          :rules="[{ required: selectedPlan && selectedPlan.planType !== 'manual', message: '请选择执行环境' }]"
+        >
           <a-select
             v-model:value="executeForm.environmentId"
             placeholder="请选择执行环境"
@@ -346,7 +366,8 @@ const columns = [
     title: '计划信息',
     key: 'name',
     dataIndex: 'name',
-    width: 200
+    width: 200,
+    align: 'left' as const
   },
   {
     title: '状态',
@@ -371,19 +392,22 @@ const columns = [
   {
     title: '时间范围',
     key: 'startDate',
-    width: 150
+    width: 180,
+    align: 'left' as const
   },
   {
     title: '创建时间',
     key: 'createdAt',
     dataIndex: 'createdAt',
-    width: 150
+    width: 180,
+    align: 'left' as const
   },
   {
     title: '操作',
     key: 'actions',
     width: 150,
-    align: 'center' as const
+    align: 'center' as const,
+    fixed: 'right' as const
   }
 ]
 
@@ -405,9 +429,46 @@ const loadPlans = async () => {
       message.warning('请先选择项目')
       return
     }
+    
+    console.log('开始加载测试计划，projectId:', projectId.value, 'params:', params)
+    
     const response = await testPlanApi.getTestPlans(projectId.value, params)
-    plans.value = response.items
-    pagination.value.total = response.total
+    console.log('获取测试计划响应:', response)
+    console.log('响应类型:', typeof response)
+    console.log('响应是否为数组:', Array.isArray(response))
+    
+    // apiClient.get() 返回的是 response.data.data，所以这里直接是分页数据对象
+    if (response && typeof response === 'object') {
+      if (Array.isArray(response)) {
+        // 如果直接是数组（不应该发生，但做兼容处理）
+        plans.value = response
+        pagination.value.total = response.length
+        console.warn('响应是数组格式，可能数据格式不正确')
+      } else if (response.items && Array.isArray(response.items)) {
+        // 标准分页格式
+        plans.value = response.items
+        pagination.value.total = response.total || 0
+        console.log('成功加载计划列表:', plans.value.length, '条，总数:', pagination.value.total)
+      } else {
+        // 尝试从嵌套的 data 中获取
+        const data = (response as any).data
+        if (data && data.items && Array.isArray(data.items)) {
+          plans.value = data.items
+          pagination.value.total = data.total || 0
+          console.log('从嵌套data中加载计划列表:', plans.value.length, '条')
+        } else {
+          console.error('无法解析响应数据:', response)
+          plans.value = []
+          pagination.value.total = 0
+        }
+      }
+    } else {
+      console.error('响应数据格式错误:', response)
+      plans.value = []
+      pagination.value.total = 0
+    }
+    
+    console.log('最终计划列表:', plans.value.map(p => ({ id: p.id, name: p.name })))
   } catch (error) {
     console.error('Failed to load plans:', error)
     message.error('加载测试计划失败')
@@ -486,6 +547,22 @@ const viewPlanDetail = async (planId: string) => {
   }
 }
 
+const viewPlanExecution = (plan: TestPlan) => {
+  // 获取项目名称
+  const project = projects.value.find(p => p.id === plan.projectId)
+  const projectName = project?.name || 'default'
+  
+  // 构建URL：/test-plans/{projectName}/{planName}?planId={planId}
+  const encodedProjectName = encodeURIComponent(projectName)
+  const encodedPlanName = encodeURIComponent(plan.name)
+  router.push({
+    path: `/test-plans/${encodedProjectName}/${encodedPlanName}`,
+    query: {
+      planId: plan.id
+    }
+  })
+}
+
 const closeDetailDrawer = () => {
   detailDrawerVisible.value = false
   selectedPlan.value = null
@@ -499,6 +576,8 @@ const closeEditModal = () => {
 
 const handlePlanSaved = () => {
   closeEditModal()
+  // 重置到第一页并刷新列表，确保新创建的计划能显示
+  pagination.value.current = 1
   loadPlans()
 }
 
@@ -535,16 +614,18 @@ const executePlan = (plan: TestPlan) => {
 }
 
 const confirmExecutePlan = async () => {
-  if (!executeForm.value.environmentId) {
+  // 只有非手动测试才需要选择环境
+  if (selectedPlan.value && selectedPlan.value.planType !== 'manual' && !executeForm.value.environmentId) {
     message.warning('请选择执行环境')
     return
   }
 
   executing.value = true
   try {
+    // 执行计划（如果是手动测试，environmentId 可以为空）
     await testPlanApi.executePlan(
       selectedPlan.value!.id,
-      executeForm.value.environmentId,
+      executeForm.value.environmentId || undefined,
       executeForm.value.notes
     )
     message.success('计划执行启动成功')
@@ -702,7 +783,28 @@ const getProgressStatus = (plan: TestPlan) => {
 
 const formatDate = (date: string) => {
   if (!date) return '-'
-  return new Date(date).toLocaleDateString('zh-CN')
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}/${month}/${day}`
+}
+
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr) return '-'
+  // 如果是 ISO 格式，直接返回（如 2025-12-25T14:39:26）
+  if (dateStr.includes('T')) {
+    return dateStr.replace('T', ' ').substring(0, 19)
+  }
+  // 否则格式化
+  const d = new Date(dateStr)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  const seconds = String(d.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 const handleProjectChange = () => {
@@ -763,16 +865,34 @@ defineExpose({
 .plan-name-link {
   font-weight: 500;
   color: #1890ff;
+  cursor: pointer;
 }
 
 .plan-name-link:hover {
   color: #40a9ff;
 }
 
+.plan-name-disabled {
+  font-weight: 500;
+  color: #8c8c8c;
+  cursor: not-allowed;
+}
+
 .plan-subtitle {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: 2px;
+}
+
+.progress-wrapper {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.progress-wrapper:hover {
+  background-color: #f5f5f5;
 }
 
 .progress-text {
@@ -785,6 +905,53 @@ defineExpose({
 .date-range {
   font-size: 12px;
   color: #8c8c8c;
+}
+
+/* 表格对齐样式 */
+.plans-card :deep(.ant-table) {
+  table-layout: fixed;
+}
+
+.plans-card :deep(.ant-table-thead > tr > th) {
+  white-space: nowrap;
+  padding: 12px 16px;
+}
+
+.plans-card :deep(.ant-table-tbody > tr > td) {
+  white-space: nowrap;
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+/* 确保计划信息列左对齐 */
+.plans-card :deep(.ant-table-thead > tr > th:first-child),
+.plans-card :deep(.ant-table-tbody > tr > td:first-child) {
+  text-align: left;
+}
+
+.plans-card :deep(.ant-table-tbody > tr > td:first-child .plan-name-link) {
+  text-align: left;
+  display: block;
+}
+
+.plans-card :deep(.ant-table-tbody > tr > td:first-child .plan-subtitle) {
+  text-align: left;
+}
+
+/* 时间范围列左对齐 */
+.plans-card :deep(.ant-table-thead > tr > th:nth-child(5)),
+.plans-card :deep(.ant-table-tbody > tr > td:nth-child(5)) {
+  text-align: left;
+}
+
+.plans-card :deep(.ant-table-tbody > tr > td:nth-child(5) .date-range) {
+  text-align: left;
+}
+
+/* 创建时间列左对齐 */
+.plans-card :deep(.ant-table-thead > tr > th:nth-child(6)),
+.plans-card :deep(.ant-table-tbody > tr > td:nth-child(6)) {
+  text-align: left;
 }
 
 /* 响应式设计 */

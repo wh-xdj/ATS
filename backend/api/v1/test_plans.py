@@ -25,13 +25,40 @@ async def get_test_plans(
     size: int = 20,
     search: Optional[str] = None,
     status: Optional[str] = None,
-    type: Optional[str] = None,
+    type: Optional[str] = None,  # 前端使用的参数名
+    plan_type: Optional[str] = None,  # 备用参数名
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     owner_id: Optional[str] = None,
 ):
     """获取测试计划列表（按项目过滤）"""
     try:
+        # 保存内置 type 函数的引用，避免被覆盖
+        import builtins
+        type_func = builtins.type
+        
+        print(f"获取测试计划列表 - project_id: {project_id}, project_id_type: {type_func(project_id)}, page: {page}, size: {size}")
+        
+        # 使用 plan_type 或 type 参数（优先使用 plan_type，避免覆盖内置函数）
+        # 注意：这里的 type 是函数参数名，不是内置函数
+        actual_plan_type = plan_type if plan_type is not None else type
+        
+        if not project_id:
+            print("错误: project_id 参数为空")
+            return APIResponse(
+                status=ResponseStatus.SUCCESS,
+                message="获取成功",
+                data={
+                    "items": [],
+                    "total": 0,
+                    "page": page,
+                    "size": size,
+                    "pages": 0,
+                    "hasNext": False,
+                    "hasPrev": False,
+                },
+            )
+        
         result = TestPlanService.get_test_plans(
             db=db,
             project_id=project_id,
@@ -39,35 +66,54 @@ async def get_test_plans(
             size=size,
             search=search,
             status=status,
-            plan_type=type,
+            plan_type=actual_plan_type,  # 使用实际的值
             owner_id=owner_id
         )
 
+        print(f"Service返回结果 - 总数: {result['total']}, 项目数: {len(result['items'])}")
+
         # 序列化返回数据
         items = serialize_list(result["items"], camel_case=True)
+        print(f"序列化后项目数: {len(items)}")
         
         # 为每个计划添加统计信息
         for item in items:
             plan_id = item.get("id")
-            cases = TestPlanService.get_plan_cases(db, plan_id)
-            item["totalCases"] = len(cases)
-            item["executedCases"] = 0  # TODO: 计算已执行用例数
+            try:
+                cases = TestPlanService.get_plan_cases(db, plan_id)
+                item["totalCases"] = len(cases)
+                # 计算已执行的用例数（非pending状态）
+                item["executedCases"] = sum(
+                    1 for case in cases 
+                    if case.get("executionStatus") and case.get("executionStatus") != "pending"
+                )
+            except Exception as e:
+                print(f"获取计划 {plan_id} 的用例失败: {e}")
+                item["totalCases"] = 0
+                item["executedCases"] = 0
+
+        response_data = {
+            "items": items,
+            "total": result["total"],
+            "page": result["page"],
+            "size": result["size"],
+            "pages": result["pages"],
+            "hasNext": result["hasNext"],
+            "hasPrev": result["hasPrev"],
+        }
+        
+        print(f"返回数据 - items数量: {len(response_data['items'])}, total: {response_data['total']}")
 
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
-            data={
-                "items": items,
-                "total": result["total"],
-                "page": result["page"],
-                "size": result["size"],
-                "pages": result["pages"],
-                "hasNext": result["hasNext"],
-                "hasPrev": result["hasPrev"],
-            },
+            data=response_data,
         )
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
         print(f"获取测试计划列表失败: {e}")
+        print(f"错误详情: {error_detail}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -98,10 +144,19 @@ async def get_test_plan(
 
     plan_data = serialize_model(plan, camel_case=True)
     
-    # 添加关联的测试用例
+    # 添加关联的测试用例（已包含执行状态）
     cases = TestPlanService.get_plan_cases(db, plan_id)
-    plan_data["testCases"] = serialize_list(cases, camel_case=True)
+    # cases已经是字典格式，直接使用
+    plan_data["testCases"] = cases
     plan_data["totalCases"] = len(cases)
+    # 计算已执行的用例数（非pending状态）
+    plan_data["executedCases"] = sum(
+        1 for case in cases 
+        if case.get("executionStatus") and case.get("executionStatus") != "pending"
+    )
+    # 确保 plan_data 包含 projectId（用于前端加载模块列表）
+    if "projectId" not in plan_data and plan.project_id:
+        plan_data["projectId"] = str(plan.project_id)
 
     return APIResponse(
         status=ResponseStatus.SUCCESS,
@@ -118,9 +173,18 @@ async def create_test_plan(
 ):
     """创建测试计划"""
     try:
+        print(f"收到创建测试计划请求: {plan_data}")
+        
         project_id = plan_data.get("project_id")
         if not project_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id 不能为空")
+
+        # 验证必填字段
+        if not plan_data.get("name"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划名称不能为空")
+        
+        if not plan_data.get("startDate"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="开始日期不能为空")
 
         plan = TestPlanService.create_test_plan(
             db=db,
@@ -137,7 +201,10 @@ async def create_test_plan(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
         print(f"创建测试计划失败: {e}")
+        print(f"错误详情: {error_detail}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"创建失败: {str(e)}")
 
 
@@ -387,4 +454,67 @@ async def clone_plan(
         status=ResponseStatus.SUCCESS,
         message="克隆成功",
         data=serialize_model(new_plan, camel_case=True),
+    )
+
+
+@router.put("/{plan_id}/cases/{case_id}/status", response_model=APIResponse)
+async def update_case_execution_status(
+    plan_id: str,
+    case_id: str,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """更新用例执行状态"""
+    status = status_data.get("status")
+    if not status:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status 不能为空")
+
+    success = TestPlanService.update_case_execution_status(
+        db=db,
+        plan_id=plan_id,
+        case_id=case_id,
+        status=status
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用例关联不存在")
+
+    # 返回更新后的计划信息（包含最新的执行进度）
+    plan = TestPlanService.get_test_plan(db, plan_id)
+    plan_data = serialize_model(plan, camel_case=True) if plan else None
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="更新成功",
+        data=plan_data
+    )
+
+
+@router.put("/{plan_id}/cases/status", response_model=APIResponse)
+async def batch_update_case_execution_status(
+    plan_id: str,
+    updates_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量更新用例执行状态"""
+    updates = updates_data.get("updates", [])
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="updates 不能为空")
+
+    TestPlanService.batch_update_case_execution_status(
+        db=db,
+        plan_id=plan_id,
+        updates=updates
+    )
+    
+    # 返回更新后的计划信息（包含最新的执行进度）
+    plan = TestPlanService.get_test_plan(db, plan_id)
+    plan_data = serialize_model(plan, camel_case=True) if plan else None
+
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="批量更新成功",
+        data=plan_data
     )

@@ -44,6 +44,8 @@ class PlanCaseRelation(Base):
     case_id = Column(String(36), ForeignKey("test_cases.id", ondelete="CASCADE"), nullable=False, index=True)
     assigned_to = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     execution_order = Column(Integer, default=0, nullable=False)
+    execution_status = Column(String(50), default="pending", nullable=True)  # pending, pass, fail, broken, error, skip
+    execution_updated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # 关系

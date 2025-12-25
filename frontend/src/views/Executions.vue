@@ -5,20 +5,6 @@
     >
       <template #extra>
         <a-space>
-          <a-select
-            v-model:value="currentProjectId"
-            style="width: 200px"
-            placeholder="选择项目"
-            @change="handleProjectChange"
-          >
-            <a-select-option
-              v-for="project in projects"
-              :key="project.id"
-              :value="project.id"
-            >
-              {{ project.name }}
-            </a-select-option>
-          </a-select>
           <a-button @click="refreshExecutions">
             <template #icon><ReloadOutlined /></template>
             刷新

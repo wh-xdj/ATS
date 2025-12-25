@@ -321,6 +321,7 @@ import * as echarts from 'echarts'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import dashboardApi from '@/api/dashboard'
+import { projectApi } from '@/api/project'
 import type { Dayjs } from 'dayjs'
 import type { Project } from '@/types'
 
@@ -446,10 +447,22 @@ const projectStatsColumns = [
 ]
 
 // 方法
+// 加载项目列表（用于项目筛选下拉框）
+const loadProjects = async () => {
+  try {
+    const response = await projectApi.getProjects()
+    projects.value = response.items || response.data?.items || []
+  } catch (error) {
+    console.error('Failed to load projects:', error)
+    projects.value = []
+  }
+}
+
 const loadDashboardData = async () => {
   loading.value = true
   try {
     await Promise.all([
+      loadProjects(),
       loadOverviewStats(),
       loadTrendData(),
       loadStatusData(),
@@ -471,12 +484,12 @@ const loadOverviewStats = async () => {
     Object.assign(overviewStats, response.data)
   } catch (error) {
     console.error('Failed to load overview stats:', error)
-    // 使用模拟数据
+    // 加载失败时重置为0
     Object.assign(overviewStats, {
-      totalProjects: 12,
-      activePlans: 8,
-      successRate: 87.5,
-      monthlyCases: 1247
+      totalProjects: 0,
+      activePlans: 0,
+      successRate: 0,
+      monthlyCases: 0
     })
   }
 }
@@ -487,16 +500,13 @@ const loadTrendData = async () => {
     renderTrendChart(response.data)
   } catch (error) {
     console.error('Failed to load trend data:', error)
-    // 使用模拟数据
-    const mockData = {
-      dates: Array.from({ length: 7 }, (_, i) => 
-        dayjs().subtract(6 - i, 'day').format('MM-DD')
-      ),
-      executions: [45, 52, 38, 61, 55, 48, 67],
-      passed: [40, 45, 35, 55, 50, 42, 60],
-      failed: [5, 7, 3, 6, 5, 6, 7]
-    }
-    renderTrendChart(mockData)
+    // 加载失败时显示空图表
+    renderTrendChart({
+      dates: [],
+      executions: [],
+      passed: [],
+      failed: []
+    })
   }
 }
 
@@ -506,14 +516,8 @@ const loadStatusData = async () => {
     renderStatusChart(response.data)
   } catch (error) {
     console.error('Failed to load status data:', error)
-    // 使用模拟数据
-    const mockData = [
-      { name: '通过', value: 856, itemStyle: { color: '#52c41a' } },
-      { name: '失败', value: 124, itemStyle: { color: '#ff4d4f' } },
-      { name: '跳过', value: 67, itemStyle: { color: '#faad14' } },
-      { name: '未执行', value: 200, itemStyle: { color: '#d9d9d9' } }
-    ]
-    renderStatusChart(mockData)
+    // 加载失败时显示空图表
+    renderStatusChart([])
   }
 }
 
@@ -523,17 +527,11 @@ const loadExecutionData = async () => {
     renderExecutionChart(response.data)
   } catch (error) {
     console.error('Failed to load execution data:', error)
-    // 使用模拟数据
-    const mockData = {
-      dates: Array.from({ length: 7 }, (_, i) => 
-        dayjs().subtract(6 - i, 'day').format('MM-DD')
-      ),
-      data: [
-        { name: '手动测试', data: [25, 32, 28, 35, 30, 27, 38] },
-        { name: '自动化测试', data: [20, 20, 10, 26, 25, 21, 29] }
-      ]
-    }
-    renderExecutionChart(mockData)
+    // 加载失败时显示空图表
+    renderExecutionChart({
+      dates: [],
+      data: []
+    })
   }
 }
 
@@ -544,30 +542,8 @@ const loadRecentActivities = async () => {
     recentActivities.value = response.data
   } catch (error) {
     console.error('Failed to load recent activities:', error)
-    // 使用模拟数据
-    recentActivities.value = [
-      {
-        id: '1',
-        type: 'execution',
-        title: '测试计划执行完成',
-        description: '用户登录功能测试计划执行完成',
-        timestamp: dayjs().subtract(2, 'hour').toISOString()
-      },
-      {
-        id: '2',
-        type: 'case',
-        title: '新增测试用例',
-        description: '支付模块新增5个测试用例',
-        timestamp: dayjs().subtract(4, 'hour').toISOString()
-      },
-      {
-        id: '3',
-        type: 'plan',
-        title: '创建测试计划',
-        description: '订单管理功能测试计划已创建',
-        timestamp: dayjs().subtract(1, 'day').toISOString()
-      }
-    ]
+    // 加载失败时显示空列表
+    recentActivities.value = []
   } finally {
     activitiesLoading.value = false
   }
@@ -581,34 +557,13 @@ const loadProjectStats = async () => {
       size: statsPagination.pageSize,
       projectId: projectFilter.value
     })
-    projectStats.value = response.data.content || response.data
-    statsPagination.total = response.data.totalElements || response.data.length || 0
+    projectStats.value = response.data.items || response.data.content || response.data || []
+    statsPagination.total = response.data.total || response.data.totalElements || 0
   } catch (error) {
     console.error('Failed to load project stats:', error)
-    // 使用模拟数据
-    projectStats.value = [
-      {
-        id: '1',
-        projectId: 'p1',
-        projectName: '电商平台',
-        totalCases: 456,
-        executionCount: 1234,
-        successRate: 85.2,
-        executionTrend: 5.3,
-        lastExecution: dayjs().subtract(1, 'hour').toISOString()
-      },
-      {
-        id: '2',
-        projectId: 'p2',
-        projectName: '移动应用',
-        totalCases: 234,
-        executionCount: 567,
-        successRate: 92.1,
-        executionTrend: -2.1,
-        lastExecution: dayjs().subtract(3, 'hour').toISOString()
-      }
-    ]
-    statsPagination.total = 2
+    // 加载失败时显示空列表
+    projectStats.value = []
+    statsPagination.total = 0
   } finally {
     statsLoading.value = false
   }

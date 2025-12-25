@@ -1,48 +1,7 @@
 <template>
   <div class="projects-container">
-    <a-layout class="projects-layout">
-      <!-- 左侧项目分类树 -->
-      <a-layout-sider width="240" class="project-tree-sider">
-        <div class="tree-header">
-          <span class="tree-title">我的项目({{ projects.length }})</span>
-          <a-dropdown :trigger="['click']" @click.stop>
-            <a-button type="text" size="small" class="add-btn">
-              <template #icon><PlusOutlined /></template>
-            </a-button>
-            <template #overlay>
-              <a-menu @click="handleAddMenuClick">
-                <a-menu-item key="addProject">添加项目</a-menu-item>
-                <a-menu-item key="addCategory">添加分类</a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </div>
-
-        <a-input-search
-          v-model:value="treeSearchValue"
-          placeholder="输入名称搜索"
-          class="tree-search"
-          @search="handleTreeSearch"
-        />
-
-        <a-tree
-          :tree-data="projectTreeData"
-          :selected-keys="selectedTreeKeys"
-          :expanded-keys="expandedTreeKeys"
-          block-node
-          show-icon
-          @select="handleTreeSelect"
-          @expand="handleTreeExpand"
-    >
-          <template #icon="{ isLeaf }">
-            <FolderOutlined v-if="!isLeaf" />
-            <FileOutlined v-else />
-          </template>
-        </a-tree>
-      </a-layout-sider>
-
-      <!-- 右侧项目列表 -->
-      <a-layout-content class="projects-content">
+    <!-- 项目列表 -->
+    <div class="projects-content">
         <div class="content-header">
         <a-button type="primary" @click="showCreateModal">
           <template #icon><PlusOutlined /></template>
@@ -106,11 +65,11 @@
               </template>
 
               <template v-else-if="column.key === 'createdBy'">
-                {{ record.createdBy || 'Administrator' }}
+                {{ record.createdByName || 'Administrator' }}
               </template>
 
               <template v-else-if="column.key === 'updatedBy'">
-                {{ record.updatedBy || record.createdBy || 'Administrator' }}
+                {{ record.updatedByName || record.createdByName || 'Administrator' }}
               </template>
 
               <template v-else-if="column.key === 'updatedAt'">
@@ -146,8 +105,7 @@
             </template>
           </a-table>
             </a-card>
-      </a-layout-content>
-    </a-layout>
+    </div>
 
     <!-- 创建/编辑项目对话框 -->
     <a-modal
@@ -197,10 +155,7 @@ import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
   PlusOutlined,
-  ProjectOutlined,
   MoreOutlined,
-  FolderOutlined,
-  FileOutlined,
   UnorderedListOutlined,
   AppstoreOutlined
 } from '@ant-design/icons-vue'
@@ -218,13 +173,7 @@ const modalVisible = ref(false)
 const editingProject = ref<Project | null>(null)
 const searchValue = ref('')
 const statusFilter = ref<string>()
-const treeSearchValue = ref('')
 const viewLayout = ref<'list' | 'grid'>('list')
-
-// 左侧树
-const selectedTreeKeys = ref<string[]>(['all'])
-const expandedTreeKeys = ref<string[]>(['all'])
-const projectTreeData = ref<any[]>([])
 
 // 表格
 const selectedRowKeys = ref<string[]>([])
@@ -306,22 +255,9 @@ const projects = computed(() => {
   return projectStore.projects
 })
 
-// 根据树选择筛选项目
+// 筛选项目
 const filteredProjects = computed(() => {
   let result = [...projects.value]
-
-  // 根据树选择筛选
-  if (selectedTreeKeys.value.length > 0) {
-    const selectedKey = selectedTreeKeys.value[0]
-    if (selectedKey === 'active') {
-      result = result.filter(p => p.status === 'active')
-    } else if (selectedKey === 'archived') {
-      result = result.filter(p => p.status === 'archived')
-    } else if (selectedKey === 'suspended') {
-      result = result.filter(p => p.status === 'suspended')
-    }
-    // 'all' 不筛选
-  }
 
   // 搜索筛选
   if (searchValue.value) {
@@ -343,74 +279,16 @@ const filteredProjects = computed(() => {
   return result
 })
 
-// 构建项目树
-const buildProjectTree = () => {
-  const allCount = projects.value.length
-  const activeCount = projects.value.filter(p => p.status === 'active').length
-  const archivedCount = projects.value.filter(p => p.status === 'archived').length
-  const suspendedCount = projects.value.filter(p => p.status === 'suspended').length
-
-  projectTreeData.value = [
-    {
-      title: `全部项目(${allCount})`,
-      key: 'all',
-      icon: 'folder',
-      isLeaf: true
-    },
-    {
-      title: `活跃项目(${activeCount})`,
-      key: 'active',
-      icon: 'folder',
-      isLeaf: true
-    },
-    {
-      title: `已归档(${archivedCount})`,
-      key: 'archived',
-      icon: 'folder',
-      isLeaf: true
-    },
-    {
-      title: `已暂停(${suspendedCount})`,
-      key: 'suspended',
-      icon: 'folder',
-      isLeaf: true
-    }
-  ]
-}
-
 const loadProjects = async () => {
   loading.value = true
   try {
     await projectStore.fetchProjects()
-    buildProjectTree()
     pagination.total = projects.value.length
   } catch (error) {
     console.error('Failed to load projects:', error)
     message.error('加载项目列表失败')
   } finally {
     loading.value = false
-  }
-}
-
-// 树相关方法
-const handleTreeSelect = (keys: string[]) => {
-  selectedTreeKeys.value = keys
-  pagination.current = 1
-}
-
-const handleTreeExpand = (keys: string[]) => {
-  expandedTreeKeys.value = keys
-}
-
-const handleTreeSearch = () => {
-  // 树搜索逻辑
-}
-
-const handleAddMenuClick = ({ key }: { key: string }) => {
-  if (key === 'addProject') {
-    showCreateModal()
-  } else if (key === 'addCategory') {
-    message.info('添加分类功能开发中...')
   }
 }
 
@@ -524,7 +402,13 @@ const handleMenuClick = ({ key }: { key: string }, project: Project) => {
 }
 
 const viewProject = (projectId: string) => {
-  router.push(`/projects/${projectId}/test-cases`)
+  // 设置当前项目
+  const project = projects.value.find(p => p.id === projectId)
+  if (project) {
+    projectStore.setCurrentProject(project)
+  }
+  // 跳转到测试用例页面
+  router.push('/test-cases')
 }
 
 const getStatusColor = (status: string) => {
@@ -561,51 +445,6 @@ onMounted(() => {
   background: #f5f5f5;
 }
 
-.projects-layout {
-  height: 100%;
-}
-
-.project-tree-sider {
-  background: #fff;
-  border-right: 1px solid #f0f0f0;
-  padding: 16px;
-  overflow-y: auto;
-}
-
-.tree-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.tree-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #262626;
-}
-
-.add-btn {
-  color: #722ed1;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-btn:hover {
-  color: #9254de;
-  background: #f9f0ff;
-}
-
-.tree-search {
-  margin-bottom: 16px;
-}
-
 .projects-content {
   background: #fff;
   margin: 0;
@@ -637,12 +476,6 @@ onMounted(() => {
 }
 
 /* 响应式设计 */
-@media (max-width: 1200px) {
-  .project-tree-sider {
-    width: 200px;
-  }
-}
-
 @media (max-width: 768px) {
   .content-header {
     flex-direction: column;

@@ -51,22 +51,6 @@
         </div>
 
         <div class="header-right">
-          <!-- 项目选择器 -->
-          <a-select
-            v-model:value="currentProjectId"
-            style="width: 200px; margin-right: 16px"
-            placeholder="选择项目"
-            @change="handleProjectChange"
-          >
-            <a-select-option
-              v-for="project in projects"
-              :key="project.id"
-              :value="project.id"
-            >
-              {{ project.name }}
-            </a-select-option>
-          </a-select>
-
           <!-- 通知 -->
           <a-dropdown>
             <a-badge :count="unreadCount">

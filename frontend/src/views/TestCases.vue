@@ -1,6 +1,6 @@
 <template>
   <div class="test-cases-container" @click="hideModuleContextMenu">
-    <!-- 顶部项目选择器（示例项目下拉） -->
+    <!-- 顶部项目选择器 -->
     <div class="project-selector-bar">
       <a-select
         v-model:value="currentProjectId"
@@ -16,7 +16,7 @@
         </a-select-option>
       </a-select>
     </div>
-
+        
     <a-layout class="test-cases-layout">
       <!-- 左侧模块树 -->
       <a-layout-sider width="240" class="module-tree-sider">
@@ -93,9 +93,9 @@
         <div class="toolbar">
           <a-space>
             <a-button type="primary" @click="handleCreateCase">
-              <template #icon><PlusOutlined /></template>
+            <template #icon><PlusOutlined /></template>
               新建
-            </a-button>
+          </a-button>
             <a-button @click="handleImport">
               <template #icon><ImportOutlined /></template>
               导入
@@ -150,7 +150,7 @@
                     <a-button size="small" @click="resetColumnSettings">重置</a-button>
                     <a-button size="small" type="primary" @click="saveColumnSettings">保存</a-button>
                   </a-space>
-                </div>
+        </div>
               </template>
               <a-button>
                 <template #icon><SettingOutlined /></template>
@@ -716,17 +716,27 @@ const defaultModuleId = ref<string>('')  // 右键创建用例时的默认模块
 // 导入对话框
 const importModalVisible = ref(false)
 
+// 存储所有用例（用于构建模块树中的用例节点）
+const allCasesForTree = ref<any[]>([])
+
 // 加载模块树
 const loadModuleTree = async () => {
   if (!projectId.value) return
   try {
+    // 先获取所有用例（用于在模块树中显示用例节点）
+    const allCasesResponse = await testCaseApi.getTestCases(projectId.value, {
+      page: 1,
+      size: 9999  // 获取所有用例
+    })
+    allCasesForTree.value = allCasesResponse.items || []
+    
     const response = await projectApi.getModules(projectId.value)
     // 新的响应格式包含 modules 和 totalCaseCount
     const moduleList = response.modules || response
-    const totalCaseCount = response.totalCaseCount ?? 0
+    const totalCaseCount = response.totalCaseCount ?? allCasesForTree.value.length
     
     modules.value = moduleList
-    const treeData = buildModuleTree(moduleList)
+    const treeData = buildModuleTree(moduleList, allCasesForTree.value)
     
     // 添加"全部用例"节点，使用后端返回的总数
     moduleTreeData.value = [
@@ -744,7 +754,7 @@ const loadModuleTree = async () => {
   }
 }
 
-const buildModuleTree = (modules: any[]): any[] => {
+const buildModuleTree = (modules: any[], allCases: any[]): any[] => {
   const treeMap = new Map()
   const treeData: any[] = []
 
@@ -773,8 +783,9 @@ const buildModuleTree = (modules: any[]): any[] => {
   })
 
   // 第三步：将用例添加到对应模块下（用于树中显示用例节点）
+  // 使用传入的 allCases 参数，而不是 testCases.value
   modules.forEach(module => {
-    const moduleCases = testCases.value.filter(c => c.moduleId === module.id)
+    const moduleCases = allCases.filter(c => c.moduleId === module.id)
     const moduleNode = treeMap.get(module.id)
     
     moduleCases.forEach(tc => {
@@ -840,8 +851,8 @@ const getModuleAndChildrenIds = (moduleId: string): string[] => {
       }
     }
     return null
-  }
-  
+}
+
   const collectChildModuleIds = (node: any) => {
     if (!node.children) return
     node.children.forEach((child: any) => {
@@ -864,7 +875,7 @@ const getModuleAndChildrenIds = (moduleId: string): string[] => {
 const loadTestCases = async () => {
   if (!projectId.value) return
 
-  loading.value = true
+    loading.value = true
   try {
     const params: any = {
       page: pagination.current,
@@ -1296,7 +1307,7 @@ const handleModuleContextMenuClick = ({ key }: { key: string }) => {
     handleBatchDeleteModules()
   } else if (key === 'deleteCase') {
     handleDeleteCaseFromTree(node)
-  }
+}
 }
 
 // 从树节点删除用例
@@ -1360,7 +1371,7 @@ const handleAddModule = (node: any) => {
           sortOrder: getNextSortOrder(parentId),
           description: ''
         })
-        message.success('模块创建成功')
+  message.success('模块创建成功')
         await loadModuleTree()
       } catch (error) {
         console.error('Failed to create module:', error)
@@ -1644,10 +1655,10 @@ onUnmounted(() => {
 .module-tree-sider {
   background: #fff;
   border-right: 1px solid #f0f0f0;
-  padding: 16px;
+    padding: 16px;
   overflow-y: auto;
-}
-
+  }
+  
 .module-search {
   margin-bottom: 16px;
 }
@@ -1655,7 +1666,7 @@ onUnmounted(() => {
 .count-badge {
   color: #999;
   font-size: 12px;
-}
+  }
 
 /* 树节点标题样式 - 单行显示 */
 .tree-node-title {
@@ -1666,8 +1677,8 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   vertical-align: middle;
   text-align: left;
-}
-
+  }
+  
 /* 树容器横向滚动 */
 .module-tree-sider :deep(.ant-tree) {
   overflow-x: auto;
@@ -1685,15 +1696,15 @@ onUnmounted(() => {
   align-items: center;
   flex: 1;
   min-width: 0;
-}
-
+  }
+  
 /* 用例节点样式 */
 .module-tree-sider :deep(.ant-tree-title) {
   display: inline-block;
   text-align: left;
   width: 100%;
-}
-
+  }
+  
 /* 右键菜单样式 - Windows 风格 */
 .module-context-menu {
   position: fixed;
@@ -1706,26 +1717,26 @@ onUnmounted(() => {
               0 9px 28px 8px rgba(0, 0, 0, 0.05);
   padding: 4px 0;
   min-width: 140px;
-}
-
+  }
+  
 .module-context-menu :deep(.ant-menu) {
   border: none;
   box-shadow: none;
   background: transparent;
-}
-
+  }
+  
 .module-context-menu :deep(.ant-menu-item) {
   height: 32px;
   line-height: 32px;
   margin: 0 !important;
   padding: 0 12px !important;
   border-radius: 0;
-}
-
+  }
+  
 .module-context-menu :deep(.ant-menu-item:hover) {
   background-color: #f5f5f5;
-}
-
+  }
+  
 .module-context-menu :deep(.ant-menu-item-divider) {
   margin: 4px 0;
   background-color: #f0f0f0;
@@ -1753,8 +1764,8 @@ onUnmounted(() => {
   
 .table-card {
   margin-bottom: 16px;
-}
-
+  }
+  
 /* 表格单行显示，不换行 */
 .table-card :deep(.ant-table-cell) {
   white-space: nowrap;
@@ -1766,8 +1777,8 @@ onUnmounted(() => {
 .case-link {
   color: #1890ff;
   cursor: pointer;
-}
-
+  }
+  
 .case-link:hover {
   text-decoration: underline;
 }

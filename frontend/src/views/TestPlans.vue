@@ -5,7 +5,22 @@
     >
       <template #extra>
         <a-space>
-          <a-button type="primary" @click="createPlan">
+          <!-- 项目选择器 -->
+          <a-select
+            v-model:value="currentProjectId"
+            style="width: 200px"
+            placeholder="选择项目"
+            @change="handleProjectChange"
+          >
+            <a-select-option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </a-select-option>
+          </a-select>
+          <a-button type="primary" @click="createPlan" :disabled="!projectId">
             <template #icon><PlusOutlined /></template>
             新建计划
           </a-button>

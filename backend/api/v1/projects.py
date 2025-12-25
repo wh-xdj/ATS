@@ -27,8 +27,26 @@ async def get_projects(
     query = db.query(Project).order_by(Project.created_at.desc())
     items = query.all()
 
-    # 使用序列化器统一转换为camelCase
-    project_list = serialize_list(items, camel_case=True)
+    # 获取所有相关的用户ID
+    user_ids = set()
+    for item in items:
+        if item.created_by:
+            user_ids.add(item.created_by)
+        if item.owner_id:
+            user_ids.add(item.owner_id)
+    
+    # 批量查询用户信息
+    users = db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    user_map = {str(u.id): u.username or u.email or str(u.id) for u in users}
+    
+    # 构建项目列表，包含用户名
+    project_list = []
+    for item in items:
+        project_data = serialize_model(item, camel_case=True)
+        # 添加用户名字段
+        project_data['createdByName'] = user_map.get(item.created_by, 'Unknown')
+        project_data['updatedByName'] = user_map.get(item.owner_id, user_map.get(item.created_by, 'Unknown'))
+        project_list.append(project_data)
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,

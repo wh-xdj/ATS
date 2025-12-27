@@ -87,6 +87,25 @@ backend/uv.lock
 backend/uploads/
 
 # ==================
+# Agent相关
+# ==================
+agent/__pycache__/
+agent/**/__pycache__/
+agent/*.pyc
+agent/**/*.pyc
+agent/.venv/
+agent/venv/
+agent/.pytest_cache/
+agent/.mypy_cache/
+agent/.ruff_cache/
+agent/uv.lock
+agent/workspace/
+agent/logs/
+agent/tasks/
+agent/cache/
+agent/config.yaml
+
+# ==================
 # 数据库
 # ==================
 *.db

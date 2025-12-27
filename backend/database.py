@@ -12,7 +12,7 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
-    echo=settings.ENVIRONMENT == "development",
+    echo=False,  # 关闭SQL语句输出到控制台
     connect_args={"charset": "utf8mb4"} if "mysql" in settings.DATABASE_URL else {}
 )
 

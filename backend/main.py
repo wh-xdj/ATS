@@ -3,9 +3,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi import WebSocket
 from config import settings
 from database import engine, Base
-from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions
+from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace
+from api.v1.websocket import websocket_endpoint
 
 # 创建数据库表（开发环境）
 # 注意：这需要数据库服务已启动
@@ -67,6 +69,24 @@ app.include_router(test_cases.router, prefix=f"{settings.API_V1_STR}/test-cases"
 app.include_router(test_plans.router, prefix=f"{settings.API_V1_STR}/test-plans", tags=["测试计划"])
 app.include_router(executions.router, prefix=f"{settings.API_V1_STR}/executions", tags=["执行历史"])
 app.include_router(environments.router, prefix=f"{settings.API_V1_STR}/environments", tags=["环境管理"])
+app.include_router(workspace.router, prefix=f"{settings.API_V1_STR}/environments", tags=["工作空间"])
+
+# WebSocket路由
+@app.websocket("/ws/agent")
+async def websocket_route(websocket: WebSocket):
+    """WebSocket路由 - Agent连接"""
+    # 从查询参数获取token
+    query_string = websocket.url.query
+    token = None
+    if query_string:
+        params = dict(param.split('=') for param in query_string.split('&') if '=' in param)
+        token = params.get('token')
+    
+    if not token:
+        await websocket.close(code=1008, reason="Token required")
+        return
+    
+    await websocket_endpoint(websocket, token)
 
 
 @app.get("/")

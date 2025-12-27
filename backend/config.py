@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "amqp://ats_user:ats_password@localhost:5672"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
+    # WebSocket配置
+    WEBSOCKET_HOST: str = "localhost"
+    WEBSOCKET_PORT: int = 8000
+    WEBSOCKET_PATH: str = "/ws/agent"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

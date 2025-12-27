@@ -210,6 +210,94 @@ async def node_heartbeat(
     )
 
 
+@router.get("/{environment_id}/start-command", response_model=APIResponse)
+async def get_start_command(
+    environment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取环境启动命令"""
+    environment = EnvironmentService.get_environment(db, str(environment_id))
+    if not environment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="环境不存在"
+        )
+    
+    if not environment.get("token"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="环境Token未生成，请先重新生成Token"
+        )
+    
+    # 构建WebSocket URL
+    from config import settings
+    ws_host = settings.WEBSOCKET_HOST
+    ws_port = settings.WEBSOCKET_PORT
+    ws_path = settings.WEBSOCKET_PATH
+    
+    # 判断协议（开发环境通常用ws，生产环境用wss）
+    protocol = "ws" if settings.ENVIRONMENT == "development" else "wss"
+    ws_url = f"{protocol}://{ws_host}:{ws_port}{ws_path}"
+    
+    # 构建启动命令
+    token = environment.get("token")
+    work_dir = environment.get("remoteWorkDir") or environment.get("remote_work_dir") or ""
+    
+    start_command = f"python agent.py --url='{ws_url}' --token='{token}' --work_dir='{work_dir}'"
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="获取成功",
+        data={
+            "startCommand": start_command,
+            "websocketUrl": ws_url,
+            "token": token,
+            "workDir": work_dir
+        }
+    )
+
+
+@router.post("/{environment_id}/regenerate-token", response_model=APIResponse)
+async def regenerate_token(
+    environment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """重新生成环境Token"""
+    # 在生成新token之前，先断开使用旧token的连接
+    from api.v1.websocket import manager
+    environment_id_str = str(environment_id)
+    
+    # 检查是否有活跃连接
+    if environment_id_str in manager.active_connections:
+        print(f"[WebSocket] 检测到环境 {environment_id_str} 有活跃连接，正在断开...")
+        # 断开连接并通知agent
+        await manager.disconnect_and_notify(
+            environment_id_str,
+            reason="Token已重新生成，请使用新Token重新连接"
+        )
+    
+    # 生成新token
+    environment = EnvironmentService.regenerate_token(
+        db=db,
+        environment_id=environment_id_str,
+        current_user_id=str(current_user.id)
+    )
+    
+    if not environment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="环境不存在"
+        )
+    
+    return APIResponse(
+        status=ResponseStatus.SUCCESS,
+        message="Token重新生成成功，旧连接已断开",
+        data=environment
+    )
+
+
 @router.post("/{environment_id}/enable", response_model=APIResponse)
 async def enable_environment(
     environment_id: str,

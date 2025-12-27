@@ -15,6 +15,9 @@ class Environment(Base, BaseModel):
     tags = Column(String(500), comment="标签，多个标签用逗号分隔")
     remote_work_dir = Column(String(500), comment="远程工作目录")
     
+    # Agent连接信息
+    token = Column(String(100), unique=True, nullable=True, index=True, comment="Agent连接Token")
+    
     # 创建人和更新人
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)

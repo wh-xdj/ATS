@@ -6,6 +6,7 @@ from models.environment import Environment
 from schemas.environment import EnvironmentCreate, EnvironmentUpdate
 from utils.serializer import serialize_model, serialize_list
 import uuid
+import secrets
 
 
 class EnvironmentService:
@@ -26,17 +27,29 @@ class EnvironmentService:
         return serialize_model(environment, camel_case=True)
     
     @staticmethod
+    def generate_token() -> str:
+        """生成唯一的Token"""
+        return secrets.token_urlsafe(32)
+    
+    @staticmethod
     def create_environment(
         db: Session,
         environment_data: EnvironmentCreate,
         current_user_id: str
     ) -> Dict[str, Any]:
         """创建环境（节点）"""
+        # 生成唯一的Token
+        token = EnvironmentService.generate_token()
+        # 确保Token唯一
+        while db.query(Environment).filter(Environment.token == token).first():
+            token = EnvironmentService.generate_token()
+        
         environment = Environment(
             id=str(uuid.uuid4()),
             name=environment_data.name,
             tags=environment_data.tags,
             remote_work_dir=environment_data.remote_work_dir,
+            token=token,  # 生成Token
             api_url=environment_data.api_url,
             web_url=environment_data.web_url,
             database_config=environment_data.database_config,
@@ -48,6 +61,35 @@ class EnvironmentService:
             updated_by=current_user_id if current_user_id else None
         )
         db.add(environment)
+        db.commit()
+        db.refresh(environment)
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def get_environment_by_token(db: Session, token: str) -> Optional[Dict[str, Any]]:
+        """根据Token获取环境"""
+        environment = db.query(Environment).filter(Environment.token == token).first()
+        if not environment:
+            return None
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def regenerate_token(db: Session, environment_id: str, current_user_id: str) -> Optional[Dict[str, Any]]:
+        """重新生成Token"""
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return None
+        
+        # 生成新的Token
+        token = EnvironmentService.generate_token()
+        # 确保Token唯一
+        while db.query(Environment).filter(Environment.token == token).first():
+            token = EnvironmentService.generate_token()
+        
+        environment.token = token
+        environment.updated_by = current_user_id
+        environment.updated_at = datetime.utcnow()
+        
         db.commit()
         db.refresh(environment)
         return serialize_model(environment, camel_case=True)

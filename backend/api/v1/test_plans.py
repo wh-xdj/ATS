@@ -87,10 +87,27 @@ async def get_test_plans(
                     1 for case in cases 
                     if case.get("executionStatus") and case.get("executionStatus") != "pending"
                 )
+                # 统计各状态的用例数量
+                item["caseStatusCounts"] = {
+                    "pending": sum(1 for case in cases if case.get("executionStatus") == "pending" or not case.get("executionStatus")),
+                    "pass": sum(1 for case in cases if case.get("executionStatus") == "pass"),
+                    "fail": sum(1 for case in cases if case.get("executionStatus") == "fail"),
+                    "broken": sum(1 for case in cases if case.get("executionStatus") == "broken"),
+                    "error": sum(1 for case in cases if case.get("executionStatus") == "error"),
+                    "skip": sum(1 for case in cases if case.get("executionStatus") == "skip")
+                }
             except Exception as e:
                 print(f"获取计划 {plan_id} 的用例失败: {e}")
                 item["totalCases"] = 0
                 item["executedCases"] = 0
+                item["caseStatusCounts"] = {
+                    "pending": 0,
+                    "pass": 0,
+                    "fail": 0,
+                    "broken": 0,
+                    "error": 0,
+                    "skip": 0
+                }
 
         response_data = {
             "items": items,
@@ -154,6 +171,15 @@ async def get_test_plan(
         1 for case in cases 
         if case.get("executionStatus") and case.get("executionStatus") != "pending"
     )
+    # 统计各状态的用例数量
+    plan_data["caseStatusCounts"] = {
+        "pending": sum(1 for case in cases if case.get("executionStatus") == "pending" or not case.get("executionStatus")),
+        "pass": sum(1 for case in cases if case.get("executionStatus") == "pass"),
+        "fail": sum(1 for case in cases if case.get("executionStatus") == "fail"),
+        "broken": sum(1 for case in cases if case.get("executionStatus") == "broken"),
+        "error": sum(1 for case in cases if case.get("executionStatus") == "error"),
+        "skip": sum(1 for case in cases if case.get("executionStatus") == "skip")
+    }
     # 确保 plan_data 包含 projectId（用于前端加载模块列表）
     if "projectId" not in plan_data and plan.project_id:
         plan_data["projectId"] = str(plan.project_id)

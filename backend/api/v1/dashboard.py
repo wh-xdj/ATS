@@ -29,9 +29,9 @@ async def get_overview_stats(
         else:
             total_projects = db.query(func.count(Project.id)).scalar() or 0
         
-        # 活跃计划数（状态为 in_progress 或 not_started）
+        # 活跃计划数（状态为 running 或 not_started）
         plans_query = db.query(func.count(TestPlan.id)).filter(
-            TestPlan.status.in_(["in_progress", "not_started"])
+            TestPlan.status.in_(["running", "not_started"])
         )
         if project_id:
             plans_query = plans_query.filter(TestPlan.project_id == project_id)
@@ -58,15 +58,19 @@ async def get_overview_stats(
             cases_query = cases_query.filter(TestCase.project_id == project_id)
         monthly_cases = cases_query.scalar() or 0
         
+        result_data = {
+            "totalProjects": total_projects,
+            "activePlans": active_plans,
+            "successRate": success_rate,
+            "monthlyCases": monthly_cases
+        }
+        
+        print(f"仪表盘概览统计 - 项目总数: {total_projects}, 活跃计划: {active_plans}, 成功率: {success_rate}, 本月用例: {monthly_cases}")
+        
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
-            data={
-                "totalProjects": total_projects,
-                "activePlans": active_plans,
-                "successRate": success_rate,
-                "monthlyCases": monthly_cases
-            }
+            data=result_data
         )
     except Exception as e:
         print(f"获取概览统计失败: {e}")

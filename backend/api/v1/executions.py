@@ -24,6 +24,7 @@ async def get_executions(
     case_id: Optional[str] = None,
     plan_id: Optional[str] = None,
     executor_id: Optional[str] = None,
+    environment_id: Optional[str] = None,
     result: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,

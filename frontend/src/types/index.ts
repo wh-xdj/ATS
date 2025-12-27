@@ -87,6 +87,15 @@ export interface CaseAttachment {
   uploadedBy: string
 }
 
+export interface CaseStatusCounts {
+  pending: number
+  pass: number
+  fail: number
+  broken: number
+  error: number
+  skip: number
+}
+
 export interface TestPlan {
   id: string
   projectId: string
@@ -103,6 +112,9 @@ export interface TestPlan {
   environmentId?: string
   createdAt: string
   updatedAt: string
+  totalCases?: number
+  executedCases?: number
+  caseStatusCounts?: CaseStatusCounts
 }
 
 export interface TestExecution {
@@ -135,6 +147,44 @@ export interface TestReport {
 }
 
 export interface Environment {
+  id: string
+  name: string
+  tags?: string
+  remoteWorkDir?: string
+  // 节点信息（从agent获取）
+  nodeIp?: string
+  osType?: string
+  osVersion?: string
+  diskInfo?: {
+    total?: string
+    used?: string
+    free?: string
+  }
+  memoryInfo?: {
+    total?: string
+    used?: string
+    free?: string
+  }
+  cpuInfo?: {
+    model?: string
+    cores?: number
+    frequency?: string
+  }
+  // 节点状态
+  isOnline: boolean
+  lastHeartbeat?: string
+  // 兼容旧字段
+  apiUrl?: string
+  webUrl?: string
+  databaseConfig?: Record<string, any>
+  envVariables?: Record<string, any>
+  description?: string
+  status: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EnvironmentOld {
   id: string
   name: string
   apiUrl?: string

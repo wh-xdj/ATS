@@ -1,0 +1,166 @@
+"""环境服务层"""
+from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session
+from datetime import datetime
+from models.environment import Environment
+from schemas.environment import EnvironmentCreate, EnvironmentUpdate
+from utils.serializer import serialize_model, serialize_list
+import uuid
+
+
+class EnvironmentService:
+    """环境服务类"""
+    
+    @staticmethod
+    def get_environments(db: Session, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """获取环境列表"""
+        environments = db.query(Environment).offset(skip).limit(limit).all()
+        return serialize_list(environments, camel_case=True)
+    
+    @staticmethod
+    def get_environment(db: Session, environment_id: str) -> Optional[Dict[str, Any]]:
+        """获取环境详情"""
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return None
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def create_environment(
+        db: Session,
+        environment_data: EnvironmentCreate,
+        current_user_id: str
+    ) -> Dict[str, Any]:
+        """创建环境（节点）"""
+        environment = Environment(
+            id=str(uuid.uuid4()),
+            name=environment_data.name,
+            tags=environment_data.tags,
+            remote_work_dir=environment_data.remote_work_dir,
+            api_url=environment_data.api_url,
+            web_url=environment_data.web_url,
+            database_config=environment_data.database_config,
+            env_variables=environment_data.env_variables,
+            description=environment_data.description,
+            status=True,
+            is_online=False,  # 新创建的节点默认离线
+            created_by=current_user_id if current_user_id else None,
+            updated_by=current_user_id if current_user_id else None
+        )
+        db.add(environment)
+        db.commit()
+        db.refresh(environment)
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def update_environment(
+        db: Session,
+        environment_id: str,
+        environment_data: EnvironmentUpdate,
+        current_user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """更新环境"""
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return None
+        
+        # 更新字段
+        update_data = environment_data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            if hasattr(environment, key):
+                setattr(environment, key, value)
+        
+        environment.updated_by = current_user_id
+        environment.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(environment)
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def delete_environment(db: Session, environment_id: str) -> bool:
+        """删除环境"""
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return False
+        db.delete(environment)
+        db.commit()
+        return True
+    
+    @staticmethod
+    def update_node_info(
+        db: Session,
+        environment_id: str,
+        node_info: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        更新节点信息（由agent调用）
+        
+        Args:
+            environment_id: 环境ID
+            node_info: 节点信息，包含：
+                - node_ip: IP地址
+                - os_type: 操作系统类型
+                - os_version: 操作系统版本
+                - disk_info: 磁盘信息
+                - memory_info: 内存信息
+                - cpu_info: CPU信息
+        """
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return None
+        
+        # 更新节点信息
+        environment.node_ip = node_info.get('node_ip')
+        environment.os_type = node_info.get('os_type')
+        environment.os_version = node_info.get('os_version')
+        environment.disk_info = node_info.get('disk_info')
+        environment.memory_info = node_info.get('memory_info')
+        environment.cpu_info = node_info.get('cpu_info')
+        environment.is_online = True
+        environment.last_heartbeat = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(environment)
+        return serialize_model(environment, camel_case=True)
+    
+    @staticmethod
+    def mark_node_offline(db: Session, environment_id: str) -> bool:
+        """标记节点为离线状态"""
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return False
+        
+        environment.is_online = False
+        # 清空节点信息（可选，根据需求决定是否保留）
+        # environment.node_ip = None
+        # environment.os_type = None
+        # ...
+        
+        db.commit()
+        return True
+    
+    @staticmethod
+    def check_node_status(db: Session, environment_id: str) -> Dict[str, Any]:
+        """
+        检查节点状态（用于定时任务）
+        如果节点超过一定时间没有心跳，标记为离线
+        """
+        environment = db.query(Environment).filter(Environment.id == environment_id).first()
+        if not environment:
+            return {"is_online": False, "message": "节点不存在"}
+        
+        if not environment.last_heartbeat:
+            environment.is_online = False
+            db.commit()
+            return {"is_online": False, "message": "节点从未连接"}
+        
+        # 如果超过5分钟没有心跳，标记为离线
+        time_diff = datetime.utcnow() - environment.last_heartbeat
+        if time_diff.total_seconds() > 300:  # 5分钟
+            environment.is_online = False
+            db.commit()
+            return {"is_online": False, "message": "节点超时未响应"}
+        
+        return {"is_online": environment.is_online, "message": "节点在线"}
+

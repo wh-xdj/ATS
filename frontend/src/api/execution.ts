@@ -11,6 +11,7 @@ export const executionApi = {
       caseId?: string
       planId?: string
       executorId?: string
+      environmentId?: string
       result?: string
       startDate?: string
       endDate?: string

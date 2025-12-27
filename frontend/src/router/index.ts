@@ -65,15 +65,6 @@ const routes = [
         }
       },
       {
-        path: 'executions',
-        name: 'Executions',
-        component: () => import('@views/Executions.vue'),
-        meta: {
-          title: '执行历史',
-          icon: 'PlayCircleOutlined'
-        }
-      },
-      {
         path: 'environments',
         name: 'Environments',
         component: () => import('@views/Environments.vue'),

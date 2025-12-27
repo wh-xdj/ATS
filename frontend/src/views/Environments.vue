@@ -52,27 +52,108 @@
 
             <template v-else-if="column.key === 'actions'">
               <a-space>
-                <a-button type="link" size="small" @click="viewDetails(record)">
-                  详情
-                </a-button>
-                <a-button type="link" size="small" @click="viewExecutionHistory(record)">
-                  执行历史
-                </a-button>
                 <a-button type="link" size="small" @click="editEnvironment(record)">
                   编辑
-                </a-button>
-                <a-button type="link" size="small" @click="testConnection(record.id)">
-                  测试连接
                 </a-button>
                 <a-button type="link" size="small" danger @click="deleteEnvironment(record.id)">
                   删除
                 </a-button>
+                <a-dropdown>
+                  <a-button type="link" size="small">
+                    更多
+                  </a-button>
+                  <template #overlay>
+                    <a-menu @click="handleMoreMenuClick($event, record)">
+                      <a-menu-item key="details">详情</a-menu-item>
+                      <a-menu-item key="startCommand">启动命令</a-menu-item>
+                      <a-menu-item key="executionHistory">执行历史</a-menu-item>
+                      <a-menu-item key="workspace">工作空间</a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
               </a-space>
             </template>
           </template>
         </a-table>
       </a-spin>
     </a-card>
+
+    <!-- 启动命令对话框 -->
+    <a-modal
+      v-model:visible="startCommandModalVisible"
+      title="启动命令"
+      width="800px"
+      :footer="null"
+    >
+      <div v-if="startCommandData">
+        <a-alert
+          message="使用以下命令启动Agent"
+          description="请在远程节点上执行此命令以连接服务端"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        
+        <a-form-item label="启动命令">
+          <a-input
+            :value="startCommandData.startCommand"
+            readonly
+            style="font-family: monospace"
+          >
+            <template #suffix>
+              <a-button
+                type="text"
+                size="small"
+                @click="copyStartCommand"
+              >
+                <template #icon><CopyOutlined /></template>
+                复制
+              </a-button>
+            </template>
+          </a-input>
+        </a-form-item>
+
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item label="WebSocket地址">
+            {{ startCommandData.websocketUrl }}
+          </a-descriptions-item>
+          <a-descriptions-item label="Token">
+            <a-input
+              :value="startCommandData.token"
+              readonly
+              style="font-family: monospace"
+            >
+              <template #suffix>
+                <a-button
+                  type="text"
+                  size="small"
+                  @click="copyToken"
+                >
+                  <template #icon><CopyOutlined /></template>
+                  复制
+                </a-button>
+              </template>
+            </a-input>
+          </a-descriptions-item>
+          <a-descriptions-item label="工作目录">
+            {{ startCommandData.workDir }}
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <a-divider />
+
+        <a-space>
+          <a-button @click="regenerateTokenForCurrent">
+            <template #icon><ReloadOutlined /></template>
+            重新生成Token
+          </a-button>
+          <a-button type="primary" @click="copyStartCommand">
+            <template #icon><CopyOutlined /></template>
+            复制启动命令
+          </a-button>
+        </a-space>
+      </div>
+    </a-modal>
 
     <!-- 节点详情对话框 -->
     <a-modal
@@ -300,6 +381,128 @@
       </a-spin>
     </a-modal>
 
+    <!-- 工作空间对话框 -->
+    <a-modal
+      v-model:visible="workspaceModalVisible"
+      title="工作空间"
+      width="1000px"
+      :footer="null"
+    >
+      <div v-if="currentWorkspaceEnvironment">
+        <a-alert
+          :message="`节点: ${currentWorkspaceEnvironment.name}`"
+          :description="`工作目录: ${currentWorkspaceEnvironment.remoteWorkDir || '-'}`"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
+        <div class="workspace-toolbar" style="margin-bottom: 16px">
+          <a-space>
+            <a-button @click="refreshWorkspace">
+              <template #icon><ReloadOutlined /></template>
+              刷新
+            </a-button>
+            <a-button @click="uploadFile" :disabled="!currentWorkspaceEnvironment.isOnline">
+              <template #icon><UploadOutlined /></template>
+              上传文件
+            </a-button>
+            <a-button @click="createFolder" :disabled="!currentWorkspaceEnvironment.isOnline">
+              <template #icon><FolderAddOutlined /></template>
+              新建文件夹
+            </a-button>
+            <a-input-search
+              v-model:value="workspaceSearchValue"
+              placeholder="搜索文件或文件夹"
+              style="width: 200px"
+              @search="handleWorkspaceSearch"
+              allow-clear
+            />
+          </a-space>
+        </div>
+
+        <a-spin :spinning="workspaceLoading">
+          <a-table
+            :columns="workspaceColumns"
+            :data-source="workspaceFiles"
+            :pagination="false"
+            :row-key="record => record.path"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'name'">
+                <a-space>
+                  <component
+                    :is="record.type === 'directory' ? FolderOutlined : FileOutlined"
+                    :style="{ color: record.type === 'directory' ? '#faad14' : '#1890ff' }"
+                  />
+                  <a
+                    v-if="record.type === 'directory'"
+                    @click="enterDirectory(record)"
+                    style="cursor: pointer"
+                  >
+                    {{ record.name }}
+                  </a>
+                  <span v-else>{{ record.name }}</span>
+                </a-space>
+              </template>
+
+              <template v-else-if="column.key === 'size'">
+                {{ record.type === 'directory' ? '-' : formatFileSize(record.size) }}
+              </template>
+
+              <template v-else-if="column.key === 'modified'">
+                {{ formatDateTime(record.modified) }}
+              </template>
+
+              <template v-else-if="column.key === 'actions'">
+                <a-space>
+                  <a-button
+                    v-if="record.type === 'file'"
+                    type="link"
+                    size="small"
+                    @click="viewFile(record)"
+                  >
+                    查看
+                  </a-button>
+                  <a-button
+                    v-if="record.type === 'file'"
+                    type="link"
+                    size="small"
+                    @click="downloadFile(record)"
+                  >
+                    下载
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    danger
+                    @click="deleteFile(record)"
+                    :disabled="!currentWorkspaceEnvironment.isOnline"
+                  >
+                    删除
+                  </a-button>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </a-spin>
+      </div>
+    </a-modal>
+
+    <!-- 文件查看对话框 -->
+    <a-modal
+      v-model:visible="fileViewModalVisible"
+      :title="`查看文件: ${currentFile?.name || ''}`"
+      width="900px"
+      :footer="null"
+    >
+      <a-spin :spinning="fileViewLoading">
+        <pre class="file-content" v-if="fileContent">{{ fileContent }}</pre>
+        <a-empty v-else description="无法加载文件内容" />
+      </a-spin>
+    </a-modal>
+
     <!-- 创建/编辑环境对话框 -->
     <a-modal
       v-model:visible="modalVisible"
@@ -358,7 +561,15 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  CopyOutlined,
+  UploadOutlined,
+  FolderAddOutlined,
+  FolderOutlined,
+  FileOutlined
+} from '@ant-design/icons-vue'
 import { environmentApi } from '@/api/environment'
 import { executionApi } from '@/api/execution'
 import { useProjectStore } from '@/stores/project'
@@ -370,8 +581,16 @@ const loading = ref(false)
 const submitting = ref(false)
 const modalVisible = ref(false)
 const detailModalVisible = ref(false)
+const startCommandModalVisible = ref(false)
 const editingEnvironment = ref<Environment | null>(null)
 const selectedEnvironment = ref<Environment | null>(null)
+const currentEnvironmentForCommand = ref<Environment | null>(null)
+const startCommandData = ref<{
+  startCommand: string
+  websocketUrl: string
+  token: string
+  workDir: string
+} | null>(null)
 
 // 执行历史相关
 const executionHistoryDrawerVisible = ref(false)
@@ -387,6 +606,18 @@ const executionLogModalVisible = ref(false)
 const executionSearchValue = ref('')
 const executionResultFilter = ref<string>()
 const executionDateRange = ref<[Dayjs, Dayjs] | null>(null)
+
+// 工作空间相关
+const workspaceModalVisible = ref(false)
+const workspaceLoading = ref(false)
+const currentWorkspaceEnvironment = ref<Environment | null>(null)
+const workspaceFiles = ref<any[]>([])
+const workspaceSearchValue = ref('')
+const currentPath = ref<string>('')
+const fileViewModalVisible = ref(false)
+const fileViewLoading = ref(false)
+const currentFile = ref<any>(null)
+const fileContent = ref<string>('')
 
 const projectStore = useProjectStore()
 const projectId = computed(() => projectStore.currentProject?.id || '')
@@ -564,17 +795,20 @@ const handleStatusChange = async (id: string, checked: boolean) => {
   }
 }
 
-const testConnection = async (id: string) => {
-  try {
-    const result = await environmentApi.testConnection(id)
-    if (result.success) {
-      message.success('连接测试成功')
-    } else {
-      message.error(result.message || '连接测试失败')
-    }
-  } catch (error) {
-    console.error('Failed to test connection:', error)
-    message.error('连接测试失败')
+const handleMoreMenuClick = ({ key }: { key: string }, record: Environment) => {
+  switch (key) {
+    case 'details':
+      viewDetails(record)
+      break
+    case 'startCommand':
+      viewStartCommand(record)
+      break
+    case 'executionHistory':
+      viewExecutionHistory(record)
+      break
+    case 'workspace':
+      viewWorkspace(record)
+      break
   }
 }
 
@@ -583,9 +817,289 @@ const viewDetails = (environment: Environment) => {
   detailModalVisible.value = true
 }
 
+const viewStartCommand = async (environment: Environment) => {
+  currentEnvironmentForCommand.value = environment
+  try {
+    const data = await environmentApi.getStartCommand(environment.id)
+    startCommandData.value = data
+    startCommandModalVisible.value = true
+  } catch (error) {
+    console.error('Failed to load start command:', error)
+    message.error('获取启动命令失败')
+  }
+}
+
+const copyStartCommand = async () => {
+  if (startCommandData.value) {
+    try {
+      await navigator.clipboard.writeText(startCommandData.value.startCommand)
+      message.success('启动命令已复制到剪贴板')
+    } catch (error) {
+      message.error('复制失败，请手动复制')
+    }
+  }
+}
+
+const copyToken = async () => {
+  if (startCommandData.value) {
+    try {
+      await navigator.clipboard.writeText(startCommandData.value.token)
+      message.success('Token已复制到剪贴板')
+    } catch (error) {
+      message.error('复制失败，请手动复制')
+    }
+  }
+}
+
+const regenerateTokenForCurrent = async () => {
+  if (!currentEnvironmentForCommand.value) return
+  
+  Modal.confirm({
+    title: '确认重新生成Token',
+    content: '重新生成Token后，旧的Token将失效，需要重新启动Agent。确定要继续吗？',
+    onOk: async () => {
+      try {
+        await environmentApi.regenerateToken(currentEnvironmentForCommand.value!.id)
+        message.success('Token已重新生成')
+        // 重新加载启动命令
+        await viewStartCommand(currentEnvironmentForCommand.value!)
+        // 重新加载环境列表
+        await loadEnvironments()
+      } catch (error) {
+        console.error('Failed to regenerate token:', error)
+        message.error('重新生成Token失败')
+      }
+    }
+  })
+}
+
 const formatDateTime = (dateTime: string | undefined): string => {
   if (!dateTime) return '-'
   return dayjs(dateTime).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 工作空间相关函数
+const workspaceColumns = [
+  {
+    title: '名称',
+    key: 'name',
+    dataIndex: 'name',
+    width: 300
+  },
+  {
+    title: '类型',
+    key: 'type',
+    dataIndex: 'type',
+    width: 100,
+    align: 'center' as const
+  },
+  {
+    title: '大小',
+    key: 'size',
+    dataIndex: 'size',
+    width: 100,
+    align: 'right' as const
+  },
+  {
+    title: '修改时间',
+    key: 'modified',
+    dataIndex: 'modified',
+    width: 180
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 200,
+    align: 'center' as const
+  }
+]
+
+const viewWorkspace = async (environment: Environment) => {
+  currentWorkspaceEnvironment.value = environment
+  currentPath.value = '' // 从工作目录根开始
+  workspaceModalVisible.value = true
+  workspaceSearchValue.value = ''
+  await loadWorkspaceFiles()
+}
+
+const loadWorkspaceFiles = async () => {
+  if (!currentWorkspaceEnvironment.value) {
+    return
+  }
+  
+  workspaceLoading.value = true
+  try {
+    // 检查环境是否在线
+    if (!currentWorkspaceEnvironment.value.isOnline) {
+      message.warning('节点离线，无法访问工作空间')
+      workspaceFiles.value = []
+      return
+    }
+    
+    // 通过API获取文件列表
+    const files = await environmentApi.listWorkspaceFiles(
+      currentWorkspaceEnvironment.value.id,
+      currentPath.value
+    )
+    workspaceFiles.value = files
+  } catch (error: any) {
+    console.error('Failed to load workspace files:', error)
+    message.error(error.response?.data?.detail || '加载工作空间文件失败')
+    workspaceFiles.value = []
+  } finally {
+    workspaceLoading.value = false
+  }
+}
+
+const refreshWorkspace = () => {
+  loadWorkspaceFiles()
+}
+
+const handleWorkspaceSearch = () => {
+  // TODO: 实现搜索功能
+  loadWorkspaceFiles()
+}
+
+const uploadFile = () => {
+  message.info('上传文件功能开发中')
+}
+
+const createFolderName = ref('')
+const createFolderModalVisible = ref(false)
+
+const createFolder = () => {
+  if (!currentWorkspaceEnvironment.value) return
+  createFolderName.value = ''
+  createFolderModalVisible.value = true
+}
+
+const handleCreateFolder = async () => {
+  if (!currentWorkspaceEnvironment.value || !createFolderName.value.trim()) {
+    message.warning('请输入文件夹名称')
+    return
+  }
+  
+  try {
+    const folderName = createFolderName.value.trim()
+    const newPath = currentPath.value 
+      ? `${currentPath.value}/${folderName}` 
+      : folderName
+    await environmentApi.createWorkspaceDirectory(
+      currentWorkspaceEnvironment.value.id,
+      newPath
+    )
+    message.success('文件夹创建成功')
+    createFolderModalVisible.value = false
+    createFolderName.value = ''
+    await loadWorkspaceFiles()
+  } catch (error: any) {
+    console.error('Failed to create folder:', error)
+    message.error(error.response?.data?.detail || '创建文件夹失败')
+  }
+}
+
+const enterDirectory = (dir: any) => {
+  currentPath.value = dir.path
+  loadWorkspaceFiles()
+}
+
+const viewFile = async (file: any) => {
+  if (!currentWorkspaceEnvironment.value) return
+  
+  currentFile.value = file
+  fileViewModalVisible.value = true
+  fileViewLoading.value = true
+  fileContent.value = ''
+  
+  try {
+    const data = await environmentApi.readWorkspaceFile(
+      currentWorkspaceEnvironment.value.id,
+      file.path
+    )
+    
+    if (data.encoding === 'base64') {
+      // 如果是base64编码，显示提示信息
+      fileContent.value = '[二进制文件，无法直接显示]'
+    } else {
+      fileContent.value = data.content
+    }
+  } catch (error: any) {
+    console.error('Failed to load file content:', error)
+    message.error(error.response?.data?.detail || '加载文件内容失败')
+    fileContent.value = ''
+  } finally {
+    fileViewLoading.value = false
+  }
+}
+
+const downloadFile = async (file: any) => {
+  if (!currentWorkspaceEnvironment.value) return
+  
+  try {
+    const data = await environmentApi.readWorkspaceFile(
+      currentWorkspaceEnvironment.value.id,
+      file.path
+    )
+    
+    // 创建下载链接
+    let blob: Blob
+    if (data.encoding === 'base64') {
+      // base64解码
+      const binaryString = atob(data.content)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      blob = new Blob([bytes])
+    } else {
+      blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' })
+    }
+    
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    message.success('文件下载成功')
+  } catch (error: any) {
+    console.error('Failed to download file:', error)
+    message.error(error.response?.data?.detail || '下载文件失败')
+  }
+}
+
+const deleteFile = (file: any) => {
+  if (!currentWorkspaceEnvironment.value) return
+  
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除${file.type === 'directory' ? '文件夹' : '文件'} "${file.name}" 吗？`,
+    okType: 'danger',
+    onOk: async () => {
+      try {
+        await environmentApi.deleteWorkspaceFile(
+          currentWorkspaceEnvironment.value!.id,
+          file.path
+        )
+        message.success('删除成功')
+        await loadWorkspaceFiles()
+      } catch (error: any) {
+        console.error('Failed to delete file:', error)
+        message.error(error.response?.data?.detail || '删除失败')
+      }
+    }
+  })
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
 // 执行历史相关函数
@@ -817,6 +1331,25 @@ onMounted(() => {
 
 .filter-section {
   margin-bottom: 16px;
+}
+
+.workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-content {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 4px;
+  max-height: 500px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* 响应式设计 */

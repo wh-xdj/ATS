@@ -180,12 +180,6 @@ const menuItems = [
     path: '/test-plans'
   },
   {
-    key: 'executions',
-    title: '执行历史',
-    icon: PlayCircleOutlined,
-    path: '/executions'
-  },
-  {
     key: 'environments',
     title: '环境管理',
     icon: SettingOutlined,

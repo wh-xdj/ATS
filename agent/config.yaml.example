@@ -1,0 +1,21 @@
+# ATS Agent 配置文件示例
+# 复制此文件为 config.yaml 并根据实际情况修改
+
+server:
+  url: "ws://localhost:8000/ws/agent"
+
+logging:
+  level: "INFO"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+
+task:
+  max_concurrent: 1  # 最大并发任务数
+  timeout: 3600      # 默认超时时间（秒）
+  cleanup:
+    keep_tasks: 10   # 保留最近N个任务
+    keep_days: 7     # 保留最近N天的任务
+
+monitor:
+  interval: 5        # 监控上报间隔（秒）
+

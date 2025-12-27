@@ -26,6 +26,7 @@
           :loading="loading"
           :pagination="pagination"
           :row-key="record => record.id"
+          :row-selection="rowSelection"
           :scroll="{ x: 1500 }"
           @change="handleTableChange"
           size="middle"
@@ -133,6 +134,62 @@
           </template>
         </a-table>
       </a-card>
+      
+      <!-- 批量操作工具栏 -->
+      <div v-if="selectedRowKeys.length > 0" class="batch-actions-bar">
+        <a-space>
+          <span class="selected-count">已选择 {{ selectedRowKeys.length }} 条用例</span>
+          <a-divider type="vertical" />
+          <span>批量更新状态：</span>
+          <a-select
+            v-model:value="batchStatus"
+            style="width: 120px"
+            placeholder="选择状态"
+            @change="handleBatchStatusChange"
+          >
+            <a-select-option value="pending">
+              <span class="status-option">
+                <span class="status-dot pending"></span>
+                待执行
+              </span>
+            </a-select-option>
+            <a-select-option value="pass">
+              <span class="status-option">
+                <span class="status-dot pass"></span>
+                通过
+              </span>
+            </a-select-option>
+            <a-select-option value="fail">
+              <span class="status-option">
+                <span class="status-dot fail"></span>
+                失败
+              </span>
+            </a-select-option>
+            <a-select-option value="broken">
+              <span class="status-option">
+                <span class="status-dot broken"></span>
+                阻塞
+              </span>
+            </a-select-option>
+            <a-select-option value="error">
+              <span class="status-option">
+                <span class="status-dot error"></span>
+                错误
+              </span>
+            </a-select-option>
+            <a-select-option value="skip">
+              <span class="status-option">
+                <span class="status-dot skip"></span>
+                跳过
+              </span>
+            </a-select-option>
+          </a-select>
+          <a-button type="primary" @click="handleBatchUpdate" :loading="batchUpdating">
+            批量更新
+          </a-button>
+          <a-button @click="clearSelection">清空选择</a-button>
+        </a-space>
+      </div>
     </div>
   </div>
 </template>
@@ -159,6 +216,9 @@ const projectId = ref('')
 const projectName = ref('')
 const executionCases = ref<any[]>([])
 const modules = ref<any[]>([])
+const selectedRowKeys = ref<string[]>([])
+const batchStatus = ref<string>('')
+const batchUpdating = ref(false)
 
 const pagination = reactive({
   current: 1,
@@ -387,6 +447,81 @@ const updatePlanProgress = async () => {
   }
 }
 
+// 行选择配置
+const rowSelection = {
+  selectedRowKeys: selectedRowKeys,
+  onChange: (keys: string[]) => {
+    selectedRowKeys.value = keys
+  },
+  onSelectAll: (selected: boolean, selectedRows: any[], changeRows: any[]) => {
+    if (selected) {
+      selectedRowKeys.value = selectedRows.map(row => row.id)
+    } else {
+      selectedRowKeys.value = []
+    }
+  }
+}
+
+// 批量更新状态
+const handleBatchStatusChange = (value: string) => {
+  batchStatus.value = value
+}
+
+// 执行批量更新
+const handleBatchUpdate = async () => {
+  if (!batchStatus.value) {
+    message.warning('请选择要更新的状态')
+    return
+  }
+  
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('请至少选择一条用例')
+    return
+  }
+  
+  batchUpdating.value = true
+  try {
+    // 更新本地状态
+    const now = new Date().toISOString()
+    executionCases.value.forEach(caseItem => {
+      if (selectedRowKeys.value.includes(caseItem.id)) {
+        caseItem.executionStatus = batchStatus.value
+        caseItem.executionUpdatedAt = now
+      }
+    })
+    
+    // 构建批量更新请求
+    const updates = selectedRowKeys.value.map(caseId => ({
+      caseId: caseId,
+      status: batchStatus.value
+    }))
+    
+    // 调用批量更新API
+    await testPlanApi.batchUpdateCaseExecutionStatus(planId.value, updates)
+    message.success(`成功更新 ${selectedRowKeys.value.length} 条用例状态`)
+    
+    // 清空选择
+    selectedRowKeys.value = []
+    batchStatus.value = ''
+    
+    // 更新执行进度并检查是否需要更新计划状态
+    await updatePlanProgress()
+  } catch (error) {
+    console.error('Failed to batch update status:', error)
+    message.error('批量更新状态失败')
+    // 刷新数据以恢复原始状态
+    loadPlanExecution()
+  } finally {
+    batchUpdating.value = false
+  }
+}
+
+// 清空选择
+const clearSelection = () => {
+  selectedRowKeys.value = []
+  batchStatus.value = ''
+}
+
 const handleTableChange = (pag: any) => {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
@@ -488,6 +623,7 @@ onMounted(() => {
 
 .content-wrapper {
   padding: 16px;
+  padding-bottom: 80px; /* 为批量操作工具栏留出空间 */
   height: calc(100vh - 120px);
   overflow: auto;
 }
@@ -544,5 +680,23 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 批量操作工具栏 */
+.batch-actions-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  padding: 12px 24px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  border-top: 1px solid #f0f0f0;
+}
+
+.selected-count {
+  font-weight: 500;
+  color: #1890ff;
 }
 </style>

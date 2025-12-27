@@ -330,7 +330,15 @@ dayjs.extend(relativeTime)
 const route = useRoute()
 
 // 计算属性
-const projectId = computed(() => route.params.projectId as string)
+const projectId = computed(() => {
+  // 优先从路由参数获取，如果没有则从store获取，最后返回undefined
+  const routeProjectId = route.params.projectId as string | undefined
+  if (routeProjectId) {
+    return routeProjectId
+  }
+  // 可以从projectStore获取当前项目ID
+  return undefined
+})
 const currentProject = computed(() => {
   // 这里应该从store中获取当前项目信息
   return { id: projectId.value, name: '当前项目' }
@@ -481,7 +489,18 @@ const loadDashboardData = async () => {
 const loadOverviewStats = async () => {
   try {
     const response = await dashboardApi.getOverviewStats(projectId.value)
-    Object.assign(overviewStats, response.data)
+    // 确保数据正确解析
+    const data = response.data || response
+    if (data && typeof data === 'object') {
+      Object.assign(overviewStats, {
+        totalProjects: data.totalProjects ?? 0,
+        activePlans: data.activePlans ?? 0,
+        successRate: data.successRate ?? 0,
+        monthlyCases: data.monthlyCases ?? 0
+      })
+    } else {
+      console.warn('Invalid response data format:', response)
+    }
   } catch (error) {
     console.error('Failed to load overview stats:', error)
     // 加载失败时重置为0

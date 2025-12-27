@@ -134,12 +134,19 @@
 
             <template v-else-if="column.key === 'progress'">
               <div class="progress-wrapper" @click="viewPlanDetail(record.id)">
-                <a-progress
-                  :percent="getProgressPercent(record)"
-                  size="small"
-                  :status="getProgressStatus(record)"
-                  style="cursor: pointer"
-                />
+                <div class="progress-content">
+                  <div class="multi-status-progress">
+                    <div 
+                      v-for="segment in getProgressSegments(record)" 
+                      :key="segment.status"
+                      class="progress-segment"
+                      :class="`segment-${segment.status}`"
+                      :style="{ width: `${segment.percent}%` }"
+                      :title="`${segment.label}: ${segment.count}`"
+                    ></div>
+                  </div>
+                  <span class="progress-percent">{{ getProgressPercent(record) }}%</span>
+                </div>
                 <div class="progress-text">
                   {{ record.executedCases || 0 }}/{{ record.totalCases || 0 }}
                 </div>
@@ -177,7 +184,6 @@
                 <a-dropdown>
                   <a-button type="link" size="small">
                     更多
-                    <template #icon><DownOutlined /></template>
                   </a-button>
                   <template #overlay>
                     <a-menu @click="(info) => handleActionClick(info.key, record)">
@@ -289,7 +295,6 @@ import {
   PlusOutlined,
   ReloadOutlined,
   DownloadOutlined,
-  DownOutlined
 } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
 import type { TestPlan, Environment, Project } from '@/types'
@@ -781,6 +786,50 @@ const getProgressStatus = (plan: TestPlan) => {
   return 'active'
 }
 
+// 获取分段进度条数据
+const getProgressSegments = (plan: TestPlan) => {
+  const total = plan.totalCases || 0
+  if (total === 0) {
+    return []
+  }
+
+  const statusCounts = plan.caseStatusCounts || {
+    pending: 0,
+    pass: 0,
+    fail: 0,
+    broken: 0,
+    error: 0,
+    skip: 0
+  }
+
+  // 定义状态顺序和标签
+  const statusOrder = [
+    { status: 'pass', label: '通过', color: '#52c41a' },
+    { status: 'fail', label: '失败', color: '#ff4d4f' },
+    { status: 'broken', label: '阻塞', color: '#faad14' },
+    { status: 'error', label: '错误', color: '#ff4d4f' },
+    { status: 'skip', label: '跳过', color: '#bfbfbf' },
+    { status: 'pending', label: '待执行', color: '#d9d9d9' }
+  ]
+
+  const segments: Array<{ status: string; label: string; percent: number; count: number; color: string }> = []
+  
+  statusOrder.forEach(({ status, label, color }) => {
+    const count = statusCounts[status] || 0
+    if (count > 0) {
+      segments.push({
+        status,
+        label,
+        percent: Math.round((count / total) * 100),
+        count,
+        color
+      })
+    }
+  })
+
+  return segments
+}
+
 const formatDate = (date: string) => {
   if (!date) return '-'
   const d = new Date(date)
@@ -893,6 +942,60 @@ defineExpose({
 
 .progress-wrapper:hover {
   background-color: #f5f5f5;
+}
+
+.progress-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.multi-status-progress {
+  display: flex;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.progress-percent {
+  font-size: 12px;
+  color: #262626;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: right;
+}
+
+.progress-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+.progress-segment.segment-pass {
+  background-color: #52c41a;
+}
+
+.progress-segment.segment-fail {
+  background-color: #ff4d4f;
+}
+
+.progress-segment.segment-broken {
+  background-color: #faad14;
+}
+
+.progress-segment.segment-error {
+  background-color: #ff4d4f;
+}
+
+.progress-segment.segment-skip {
+  background-color: #bfbfbf;
+}
+
+.progress-segment.segment-pending {
+  background-color: #d9d9d9;
 }
 
 .progress-text {

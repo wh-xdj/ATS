@@ -5,7 +5,7 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # 支持直接运行和作为模块运行
 if __name__ == "__main__":
@@ -444,6 +444,221 @@ class Agent:
                 "success": False,
                 "error": str(e)
             })
+    
+    async def _handle_execute_test_suite(self, message: Dict[str, Any]) -> None:
+        """处理测试套执行请求"""
+        if not self.ws_client:
+            return
+        
+        suite_id = message.get("suite_id")
+        plan_id = message.get("plan_id")
+        git_repo_url = message.get("git_repo_url")
+        git_branch = message.get("git_branch", "main")
+        git_token = message.get("git_token")
+        execution_command = message.get("execution_command")
+        case_ids = message.get("case_ids", [])
+        executor_id = message.get("executor_id", "system")
+        
+        if self.logger:
+            self.logger.info(f"收到测试套执行请求: suite_id={suite_id}, cases={len(case_ids)}")
+        
+        if not suite_id or not git_repo_url or not execution_command or not case_ids:
+            if self.logger:
+                self.logger.error("测试套执行请求缺少必要参数")
+            return
+        
+        # 在后台执行测试套
+        asyncio.create_task(self._execute_test_suite_async(
+            suite_id=suite_id,
+            plan_id=plan_id,
+            git_repo_url=git_repo_url,
+            git_branch=git_branch,
+            git_token=git_token,
+            execution_command=execution_command,
+            case_ids=case_ids,
+            executor_id=executor_id
+        ))
+    
+    async def _execute_test_suite_async(
+        self,
+        suite_id: str,
+        plan_id: Optional[str],
+        git_repo_url: str,
+        git_branch: str,
+        git_token: Optional[str],
+        execution_command: str,
+        case_ids: List[str],
+        executor_id: str
+    ) -> None:
+        """异步执行测试套"""
+        import subprocess
+        import shutil
+        from pathlib import Path
+        
+        if not self.work_dir or not self.ws_client:
+            return
+        
+        suite_work_dir = self.work_dir / "suites" / suite_id
+        suite_work_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            if self.logger:
+                self.logger.info(f"开始执行测试套: {suite_id}")
+                self.logger.info(f"工作目录: {suite_work_dir}")
+                self.logger.info(f"Git仓库: {git_repo_url}, 分支: {git_branch}")
+            
+            # 1. 克隆或更新代码
+            repo_dir = suite_work_dir / "repo"
+            if repo_dir.exists():
+                # 如果已存在，更新代码
+                if self.logger:
+                    self.logger.info("代码目录已存在，更新代码...")
+                try:
+                    subprocess.run(
+                        ["git", "fetch", "origin"],
+                        cwd=repo_dir,
+                        check=True,
+                        capture_output=True,
+                        timeout=60
+                    )
+                    subprocess.run(
+                        ["git", "checkout", git_branch],
+                        cwd=repo_dir,
+                        check=True,
+                        capture_output=True,
+                        timeout=30
+                    )
+                    subprocess.run(
+                        ["git", "pull", "origin", git_branch],
+                        cwd=repo_dir,
+                        check=True,
+                        capture_output=True,
+                        timeout=60
+                    )
+                except subprocess.CalledProcessError as e:
+                    if self.logger:
+                        self.logger.warning(f"更新代码失败，尝试重新克隆: {e}")
+                    shutil.rmtree(repo_dir)
+                    repo_dir.mkdir(parents=True, exist_ok=True)
+            
+            if not repo_dir.exists() or not (repo_dir / ".git").exists():
+                # 克隆代码
+                if self.logger:
+                    self.logger.info("克隆代码仓库...")
+                
+                # 构建带token的Git URL
+                if git_token:
+                    # 从URL中提取仓库路径
+                    if "://" in git_repo_url:
+                        # https://github.com/user/repo.git -> https://token@github.com/user/repo.git
+                        url_parts = git_repo_url.split("://")
+                        if len(url_parts) == 2:
+                            git_url_with_token = f"{url_parts[0]}://{git_token}@{url_parts[1]}"
+                        else:
+                            git_url_with_token = git_repo_url
+                    else:
+                        git_url_with_token = git_repo_url
+                else:
+                    git_url_with_token = git_repo_url
+                
+                subprocess.run(
+                    ["git", "clone", "-b", git_branch, git_url_with_token, str(repo_dir)],
+                    check=True,
+                    capture_output=True,
+                    timeout=300
+                )
+            
+            # 2. 执行命令
+            if self.logger:
+                self.logger.info(f"执行命令: {execution_command}")
+            
+            # 在repo目录中执行命令
+            process = subprocess.Popen(
+                execution_command,
+                shell=True,
+                cwd=repo_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            log_output = ""
+            start_time = datetime.now()
+            
+            # 实时读取输出
+            for line in process.stdout:
+                if line:
+                    log_output += line
+                    if self.logger:
+                        self.logger.debug(f"[测试套执行] {line.strip()}")
+            
+            process.wait()
+            end_time = datetime.now()
+            duration = str(end_time - start_time)
+            
+            # 3. 根据执行结果上报每个用例的执行结果
+            # 这里简化处理：如果命令执行成功，所有用例标记为passed；失败则标记为failed
+            result = "passed" if process.returncode == 0 else "failed"
+            error_message = None if process.returncode == 0 else f"命令执行失败，退出码: {process.returncode}"
+            
+            # 为每个用例上报执行结果
+            for case_id in case_ids:
+                await self.ws_client.send_message({
+                    "type": "test_suite_result",
+                    "suite_id": suite_id,
+                    "case_id": case_id,
+                    "result": result,
+                    "duration": duration,
+                    "log_output": log_output,
+                    "error_message": error_message,
+                    "executor_id": executor_id
+                })
+            
+            if self.logger:
+                self.logger.info(f"测试套执行完成: {suite_id}, 结果: {result}, 用例数: {len(case_ids)}")
+        
+        except subprocess.TimeoutExpired:
+            error_msg = "执行超时"
+            if self.logger:
+                self.logger.error(f"测试套执行超时: {suite_id}")
+            
+            # 为所有用例上报超时错误
+            for case_id in case_ids:
+                await self.ws_client.send_message({
+                    "type": "test_suite_result",
+                    "suite_id": suite_id,
+                    "case_id": case_id,
+                    "result": "error",
+                    "duration": None,
+                    "log_output": log_output if 'log_output' in locals() else "",
+                    "error_message": error_msg,
+                    "executor_id": executor_id
+                })
+        
+        except Exception as e:
+            error_msg = str(e)
+            if self.logger:
+                self.logger.exception(f"测试套执行失败: {suite_id}, 错误: {e}")
+            
+            # 为所有用例上报错误
+            for case_id in case_ids:
+                await self.ws_client.send_message({
+                    "type": "test_suite_result",
+                    "suite_id": suite_id,
+                    "case_id": case_id,
+                    "result": "error",
+                    "duration": None,
+                    "log_output": log_output if 'log_output' in locals() else "",
+                    "error_message": error_msg,
+                    "executor_id": executor_id
+                })
+        
+        finally:
+            # 清理临时目录（可选，保留以便调试）
+            # if suite_work_dir.exists():
+            #     shutil.rmtree(suite_work_dir)
+            pass
     
     async def _monitor_loop(self) -> None:
         """监控循环"""

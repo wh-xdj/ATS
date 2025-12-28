@@ -1,4 +1,7 @@
 """FastAPI应用入口"""
+# 首先导入 logger 以初始化日志系统
+from core.logger import logger
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi import WebSocket
 from config import settings
 from database import engine, Base
-from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace
+from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace, test_suites
 from api.v1.websocket import websocket_endpoint
 
 # 创建数据库表（开发环境）
@@ -15,8 +18,8 @@ if settings.ENVIRONMENT == "development":
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:
-        print(f"警告: 无法连接到数据库，跳过自动创建表: {e}")
-        print("请确保 MySQL 服务已启动，或稍后使用 alembic 进行数据库迁移")
+        logger.warning(f"警告: 无法连接到数据库，跳过自动创建表: {e}")
+        logger.warning("请确保 MySQL 服务已启动，或稍后使用 alembic 进行数据库迁移")
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -70,6 +73,7 @@ app.include_router(test_plans.router, prefix=f"{settings.API_V1_STR}/test-plans"
 app.include_router(executions.router, prefix=f"{settings.API_V1_STR}/executions", tags=["执行历史"])
 app.include_router(environments.router, prefix=f"{settings.API_V1_STR}/environments", tags=["环境管理"])
 app.include_router(workspace.router, prefix=f"{settings.API_V1_STR}/environments", tags=["工作空间"])
+app.include_router(test_suites.router, prefix=f"{settings.API_V1_STR}/test-plans", tags=["测试套"])
 
 # WebSocket路由
 @app.websocket("/ws/agent")

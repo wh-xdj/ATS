@@ -11,6 +11,7 @@ from api.deps import get_current_user
 from models import User
 from services.test_plan_service import TestPlanService
 from utils.serializer import serialize_model, serialize_list
+from core.logger import logger
 
 
 router = APIRouter()
@@ -37,14 +38,14 @@ async def get_test_plans(
         import builtins
         type_func = builtins.type
         
-        print(f"获取测试计划列表 - project_id: {project_id}, project_id_type: {type_func(project_id)}, page: {page}, size: {size}")
+        logger.debug(f"获取测试计划列表 - project_id: {project_id}, project_id_type: {type_func(project_id)}, page: {page}, size: {size}")
         
         # 使用 plan_type 或 type 参数（优先使用 plan_type，避免覆盖内置函数）
         # 注意：这里的 type 是函数参数名，不是内置函数
         actual_plan_type = plan_type if plan_type is not None else type
         
         if not project_id:
-            print("错误: project_id 参数为空")
+            logger.warning("错误: project_id 参数为空")
             return APIResponse(
                 status=ResponseStatus.SUCCESS,
                 message="获取成功",
@@ -70,11 +71,11 @@ async def get_test_plans(
             owner_id=owner_id
         )
 
-        print(f"Service返回结果 - 总数: {result['total']}, 项目数: {len(result['items'])}")
+        logger.debug(f"Service返回结果 - 总数: {result['total']}, 项目数: {len(result['items'])}")
 
         # 序列化返回数据
         items = serialize_list(result["items"], camel_case=True)
-        print(f"序列化后项目数: {len(items)}")
+        logger.debug(f"序列化后项目数: {len(items)}")
         
         # 为每个计划添加统计信息
         for item in items:
@@ -97,7 +98,7 @@ async def get_test_plans(
                     "skip": sum(1 for case in cases if case.get("executionStatus") == "skip")
                 }
             except Exception as e:
-                print(f"获取计划 {plan_id} 的用例失败: {e}")
+                logger.error(f"获取计划 {plan_id} 的用例失败: {e}")
                 item["totalCases"] = 0
                 item["executedCases"] = 0
                 item["caseStatusCounts"] = {
@@ -119,7 +120,7 @@ async def get_test_plans(
             "hasPrev": result["hasPrev"],
         }
         
-        print(f"返回数据 - items数量: {len(response_data['items'])}, total: {response_data['total']}")
+        logger.debug(f"返回数据 - items数量: {len(response_data['items'])}, total: {response_data['total']}")
 
         return APIResponse(
             status=ResponseStatus.SUCCESS,
@@ -129,8 +130,8 @@ async def get_test_plans(
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"获取测试计划列表失败: {e}")
-        print(f"错误详情: {error_detail}")
+        logger.error(f"获取测试计划列表失败: {e}")
+        logger.error(f"错误详情: {error_detail}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -199,7 +200,7 @@ async def create_test_plan(
 ):
     """创建测试计划"""
     try:
-        print(f"收到创建测试计划请求: {plan_data}")
+        logger.debug(f"收到创建测试计划请求: {plan_data}")
         
         project_id = plan_data.get("project_id")
         if not project_id:
@@ -229,8 +230,8 @@ async def create_test_plan(
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"创建测试计划失败: {e}")
-        print(f"错误详情: {error_detail}")
+        logger.error(f"创建测试计划失败: {e}")
+        logger.error(f"错误详情: {error_detail}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"创建失败: {str(e)}")
 
 
@@ -261,7 +262,7 @@ async def update_test_plan(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"更新测试计划失败: {e}")
+        logger.error(f"更新测试计划失败: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"更新失败: {str(e)}")
 
 

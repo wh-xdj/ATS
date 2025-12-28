@@ -45,6 +45,7 @@ class Environment(Base, BaseModel):
     # 关系
     test_plans = relationship("TestPlan", back_populates="environment")
     executions = relationship("TestExecution", back_populates="environment")
+    test_suites = relationship("TestSuite", back_populates="environment")
     
     def __repr__(self):
         return f"<Environment(id={self.id}, name={self.name}, is_online={self.is_online})>"

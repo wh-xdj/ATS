@@ -1,7 +1,9 @@
 """WebSocket服务器 - 用于Agent连接"""
 from fastapi import WebSocket, WebSocketDisconnect
 from services.environment_service import EnvironmentService
+from core.logger import logger
 from typing import Dict
+from sqlalchemy.orm import Session
 import json
 import asyncio
 from datetime import datetime
@@ -23,7 +25,7 @@ class ConnectionManager:
         # 存储token映射
         if token:
             self.token_to_env[token] = environment_id
-        print(f"[WebSocket] 环境 {environment_id} 已连接")
+        logger.info(f"[WebSocket] 环境 {environment_id} 已连接")
     
     def disconnect(self, environment_id: str):
         """断开WebSocket连接"""
@@ -31,7 +33,7 @@ class ConnectionManager:
             del self.active_connections[environment_id]
         # 清理token映射
         self.token_to_env = {k: v for k, v in self.token_to_env.items() if v != environment_id}
-        print(f"[WebSocket] 环境 {environment_id} 已断开")
+        logger.info(f"[WebSocket] 环境 {environment_id} 已断开")
     
     async def disconnect_and_notify(self, environment_id: str, reason: str = "Token已失效，请重新连接"):
         """断开连接并发送通知消息"""
@@ -47,7 +49,7 @@ class ConnectionManager:
                 # 关闭连接
                 await websocket.close(code=1008, reason=reason)
             except Exception as e:
-                print(f"[WebSocket] 断开连接时出错 {environment_id}: {e}")
+                logger.error(f"[WebSocket] 断开连接时出错 {environment_id}: {e}")
             finally:
                 self.disconnect(environment_id)
     
@@ -58,7 +60,7 @@ class ConnectionManager:
                 await self.active_connections[environment_id].send_json(message)
                 return True
             except Exception as e:
-                print(f"[WebSocket] 发送消息失败 {environment_id}: {e}")
+                logger.error(f"[WebSocket] 发送消息失败 {environment_id}: {e}")
                 self.disconnect(environment_id)
                 return False
         return False
@@ -70,7 +72,7 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
             except Exception as e:
-                print(f"[WebSocket] 广播失败 {environment_id}: {e}")
+                logger.error(f"[WebSocket] 广播失败 {environment_id}: {e}")
                 disconnected.append(environment_id)
         
         # 清理断开的连接
@@ -150,7 +152,11 @@ async def websocket_endpoint(
                     # 处理任务结果
                     elif message.get("type") == "task_result":
                         # TODO: 处理任务执行结果
-                        print(f"[WebSocket] 收到任务结果: {message}")
+                        logger.info(f"[WebSocket] 收到任务结果: {message}")
+                    
+                    # 处理测试套执行结果
+                    elif message.get("type") == "test_suite_result":
+                        await handle_test_suite_result(db, environment_id, message)
                     
                     # 处理工作空间响应（从Agent返回）
                     elif message.get("type") in [
@@ -161,35 +167,29 @@ async def websocket_endpoint(
                         "workspace_mkdir_response"
                     ]:
                         # 转发响应到workspace API模块
-                        print(f"[WebSocket] 收到工作空间响应: {message.get('type')}, request_id: {message.get('request_id')}")
+                        logger.debug(f"[WebSocket] 收到工作空间响应: {message.get('type')}, request_id: {message.get('request_id')}")
                         from api.v1.workspace import handle_workspace_response
                         try:
                             handle_workspace_response(message)
                         except Exception as e:
-                            print(f"[WebSocket] 处理工作空间响应时出错: {e}")
-                            import traceback
-                            traceback.print_exc()
+                            logger.exception(f"[WebSocket] 处理工作空间响应时出错: {e}")
                     
                     else:
-                        print(f"[WebSocket] 收到未知消息类型: {message.get('type')}")
+                        logger.warning(f"[WebSocket] 收到未知消息类型: {message.get('type')}")
                         
                 except asyncio.TimeoutError:
                     # 超时，发送ping保持连接
                     await websocket.send_json({"type": "ping"})
                 except json.JSONDecodeError:
-                    print(f"[WebSocket] 收到无效JSON: {data}")
+                    logger.warning(f"[WebSocket] 收到无效JSON: {data}")
                     
         except WebSocketDisconnect:
-            print(f"[WebSocket] 客户端断开连接: {environment_id}")
+            logger.info(f"[WebSocket] 客户端断开连接: {environment_id}")
         except Exception as e:
-            print(f"[WebSocket] 连接错误: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"[WebSocket] 连接错误: {e}")
     except Exception as e:
         # 处理外层异常（如数据库错误）
-        print(f"[WebSocket] 初始化连接错误: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[WebSocket] 初始化连接错误: {e}")
         try:
             await websocket.close(code=1011, reason=f"Server error: {str(e)}")
         except:
@@ -201,9 +201,61 @@ async def websocket_endpoint(
                 manager.disconnect(environment_id)
                 EnvironmentService.mark_node_offline(db, environment_id)
             except Exception as e:
-                print(f"[WebSocket] 清理连接时出错: {e}")
+                logger.error(f"[WebSocket] 清理连接时出错: {e}")
         try:
             db.close()
         except:
             pass
+
+
+async def handle_test_suite_result(db: Session, environment_id: str, message: dict):
+    """处理测试套执行结果"""
+    from services.test_suite_service import TestSuiteService
+    from models.test_suite import TestSuite
+    
+    try:
+        suite_id = message.get("suite_id")
+        case_id = message.get("case_id")
+        result = message.get("result")  # passed, failed, error, skipped
+        duration = message.get("duration")
+        log_output = message.get("log_output")
+        error_message = message.get("error_message")
+        executor_id = message.get("executor_id")
+        
+        if not suite_id or not case_id:
+            logger.warning(f"[WebSocket] 测试套执行结果缺少必要字段: {message}")
+            return
+        
+        # 创建执行记录
+        TestSuiteService.create_suite_execution(
+            db=db,
+            suite_id=suite_id,
+            case_id=case_id,
+            environment_id=environment_id,
+            executor_id=executor_id or "system",
+            result=result,
+            duration=duration,
+            log_output=log_output,
+            error_message=error_message
+        )
+        
+        logger.info(f"[WebSocket] 测试套执行记录已保存: suite_id={suite_id}, case_id={case_id}, result={result}")
+        
+        # 检查是否所有用例都执行完成
+        suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
+        if suite:
+            # 获取所有执行记录
+            executions = TestSuiteService.get_suite_executions(db, suite_id, skip=0, limit=1000)
+            executed_case_ids = {e.case_id for e in executions["items"]}
+            
+            # 如果所有用例都已执行，更新测试套状态
+            if len(executed_case_ids) >= len(suite.case_ids):
+                # 检查是否有失败的用例
+                has_failed = any(e.result in ["failed", "error"] for e in executions["items"])
+                suite.status = "failed" if has_failed else "completed"
+                db.commit()
+                logger.info(f"[WebSocket] 测试套执行完成: suite_id={suite_id}, status={suite.status}")
+        
+    except Exception as e:
+        logger.exception(f"[WebSocket] 处理测试套执行结果时出错: {e}")
 

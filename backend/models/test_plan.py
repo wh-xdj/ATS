@@ -30,6 +30,7 @@ class TestPlan(Base, BaseModel):
     case_relations = relationship("PlanCaseRelation", back_populates="plan", cascade="all, delete-orphan")
     executions = relationship("TestExecution", back_populates="plan")
     reports = relationship("TestReport", back_populates="plan")
+    test_suites = relationship("TestSuite", back_populates="plan", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<TestPlan(id={self.id}, plan_number={self.plan_number}, name={self.name})>"

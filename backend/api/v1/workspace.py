@@ -7,6 +7,7 @@ from api.deps import get_current_user
 from api.v1.websocket import manager
 from services.environment_service import EnvironmentService
 from schemas.common import APIResponse, ResponseStatus
+from core.logger import logger
 import uuid
 import asyncio
 from typing import Dict, Any, Optional
@@ -53,7 +54,7 @@ async def send_workspace_request(
     }
     
     # 发送消息
-    print(f"[Workspace] 发送请求到环境 {environment_id}: {message_type}, request_id: {request_id}")
+    logger.info(f"[Workspace] 发送请求到环境 {environment_id}: {message_type}, request_id: {request_id}")
     success = await manager.send_message(environment_id, message)
     if not success:
         del pending_requests[request_id]
@@ -62,13 +63,13 @@ async def send_workspace_request(
             detail="Agent未连接或无法发送消息"
         )
     
-    print(f"[Workspace] 消息已发送，等待响应...")
+    logger.debug(f"[Workspace] 消息已发送，等待响应...")
     # 等待响应（带超时）
     try:
         await asyncio.wait_for(event.wait(), timeout=timeout)
-        print(f"[Workspace] 收到响应，request_id: {request_id}")
+        logger.info(f"[Workspace] 收到响应，request_id: {request_id}")
     except asyncio.TimeoutError:
-        print(f"[Workspace] 等待响应超时，request_id: {request_id}")
+        logger.warning(f"[Workspace] 等待响应超时，request_id: {request_id}")
         del pending_requests[request_id]
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -102,19 +103,19 @@ def handle_workspace_response(message: Dict[str, Any]) -> None:
     """
     request_id = message.get("request_id")
     msg_type = message.get("type", "unknown")
-    print(f"[Workspace] 收到响应: {msg_type}, request_id: {request_id}")
+    logger.info(f"[Workspace] 收到响应: {msg_type}, request_id: {request_id}")
     
     if not request_id:
-        print(f"[Workspace] 警告: 响应消息缺少request_id")
+        logger.warning(f"[Workspace] 警告: 响应消息缺少request_id")
         return
     
     if request_id not in pending_requests:
-        print(f"[Workspace] 警告: 未找到对应的请求，request_id: {request_id}, 当前pending: {list(pending_requests.keys())}")
+        logger.warning(f"[Workspace] 警告: 未找到对应的请求，request_id: {request_id}, 当前pending: {list(pending_requests.keys())}")
         return
     
     event, _ = pending_requests[request_id]
     pending_requests[request_id] = (event, message)
-    print(f"[Workspace] 设置事件，request_id: {request_id}")
+    logger.debug(f"[Workspace] 设置事件，request_id: {request_id}")
     event.set()
 
 

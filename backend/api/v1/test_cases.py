@@ -129,8 +129,8 @@ async def create_test_case(
             data=serialized_case,
         )
     except Exception as e:
-        import traceback
-        print("创建测试用例失败:", traceback.format_exc())
+        from core.logger import logger
+        logger.exception("创建测试用例失败")
         raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
 
 

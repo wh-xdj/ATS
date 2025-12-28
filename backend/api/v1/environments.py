@@ -10,6 +10,7 @@ from api.deps import get_current_user
 from models import User
 from services.environment_service import EnvironmentService
 from utils.serializer import serialize_model, serialize_list, deserialize_dict
+from core.logger import logger
 
 router = APIRouter()
 
@@ -64,17 +65,17 @@ async def create_environment(
     
     # 调试日志：打印原始数据
     import json
-    print(f"[DEBUG] 创建环境 - 原始数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
+    logger.debug(f"[DEBUG] 创建环境 - 原始数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
     
     # 手动处理字段名转换（前端发送的是camelCase，后端需要snake_case）
     request_data = deserialize_dict(request_data, snake_case=True)
     
-    print(f"[DEBUG] 创建环境 - 转换后数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
+    logger.debug(f"[DEBUG] 创建环境 - 转换后数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
     
     # 创建 Pydantic 模型
     environment_data = EnvironmentCreate(**request_data)
     
-    print(f"[DEBUG] remote_work_dir值: {environment_data.remote_work_dir}")
+    logger.debug(f"[DEBUG] remote_work_dir值: {environment_data.remote_work_dir}")
     
     environment = EnvironmentService.create_environment(
         db=db,
@@ -102,17 +103,17 @@ async def update_environment(
     
     # 调试日志：打印原始数据
     import json
-    print(f"[DEBUG] 更新环境 - 原始数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
+    logger.debug(f"[DEBUG] 更新环境 - 原始数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
     
     # 手动处理字段名转换（前端发送的是camelCase，后端需要snake_case）
     request_data = deserialize_dict(request_data, snake_case=True)
     
-    print(f"[DEBUG] 更新环境 - 转换后数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
+    logger.debug(f"[DEBUG] 更新环境 - 转换后数据: {json.dumps(request_data, indent=2, ensure_ascii=False)}")
     
     # 创建 Pydantic 模型
     environment_data = EnvironmentUpdate(**request_data)
     
-    print(f"[DEBUG] remote_work_dir值: {environment_data.remote_work_dir}")
+    logger.debug(f"[DEBUG] remote_work_dir值: {environment_data.remote_work_dir}")
     
     environment = EnvironmentService.update_environment(
         db=db,
@@ -271,7 +272,7 @@ async def regenerate_token(
     
     # 检查是否有活跃连接
     if environment_id_str in manager.active_connections:
-        print(f"[WebSocket] 检测到环境 {environment_id_str} 有活跃连接，正在断开...")
+        logger.info(f"[WebSocket] 检测到环境 {environment_id_str} 有活跃连接，正在断开...")
         # 断开连接并通知agent
         await manager.disconnect_and_notify(
             environment_id_str,

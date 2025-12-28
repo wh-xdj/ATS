@@ -1,5 +1,5 @@
 """测试用例模型"""
-from sqlalchemy import Column, String, Text, ForeignKey, Float, DateTime, JSON, func
+from sqlalchemy import Column, String, Text, ForeignKey, Float, DateTime, JSON, Boolean, func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 from database import Base
@@ -26,6 +26,7 @@ class TestCase(Base, BaseModel):
     executor_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     tags = Column(JSON)  # ["回归", "冒烟"]
     status = Column(String(50), default="not_executed", nullable=False, index=True)
+    is_automated = Column(Boolean, default=False, nullable=False, comment="是否自动化")
     created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     

@@ -216,8 +216,8 @@ async def create_module(
             data=serialize_model(module, camel_case=True)
         )
     except Exception as e:
-        import traceback
-        print("创建模块失败:", traceback.format_exc())
+        from core.logger import logger
+        logger.exception("创建模块失败")
         raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
 
 

@@ -6,7 +6,8 @@ from sqlalchemy import and_, or_
 from models.test_plan import TestPlan, PlanCaseRelation
 from models.test_case import TestCase
 from models.user import User
-from datetime import datetime
+from core.logger import logger
+from datetime import datetime, date
 import uuid
 
 
@@ -25,12 +26,12 @@ class TestPlanService:
         owner_id: Optional[str] = None,
     ):
         """获取测试计划列表"""
-        print(f"TestPlanService.get_test_plans - project_id: {project_id}, type: {type(project_id)}")
+        logger.debug(f"TestPlanService.get_test_plans - project_id: {project_id}, type: {type(project_id)}")
         
         # 确保 project_id 是字符串格式
         project_id_str = str(project_id) if project_id else None
         if not project_id_str:
-            print("错误: project_id 为空")
+            logger.warning("错误: project_id 为空")
             return {
                 "items": [],
                 "total": 0,
@@ -43,19 +44,19 @@ class TestPlanService:
         
         # 查询所有计划（用于调试，仅在前几条记录时打印）
         all_plans_count = db.query(TestPlan).count()
-        print(f"数据库中所有计划数量: {all_plans_count}")
+        logger.debug(f"数据库中所有计划数量: {all_plans_count}")
         
         # 检查是否有匹配的项目ID
         sample_plans = db.query(TestPlan).limit(5).all()
         for p in sample_plans:
-            print(f"  示例计划: id={p.id}, name={p.name}, project_id={p.project_id} (str={str(p.project_id)})")
+            logger.debug(f"  示例计划: id={p.id}, name={p.name}, project_id={p.project_id} (str={str(p.project_id)})")
         
         # 使用字符串比较进行过滤
         query = db.query(TestPlan).filter(TestPlan.project_id == project_id_str)
         
         # 检查过滤后的数量
         count_before_pagination = query.count()
-        print(f"过滤后计划数量 (project_id={project_id_str}): {count_before_pagination}")
+        logger.debug(f"过滤后计划数量 (project_id={project_id_str}): {count_before_pagination}")
 
         # 搜索条件
         if search:
@@ -85,6 +86,9 @@ class TestPlanService:
         offset = (page - 1) * size
         items = query.order_by(TestPlan.created_at.desc()).offset(offset).limit(size).all()
 
+        # 检查并更新超时计划状态
+        TestPlanService._check_and_update_overdue_plans(db, items)
+
         # 计算总页数
         pages = (total + size - 1) // size if total > 0 else 0
 
@@ -101,7 +105,11 @@ class TestPlanService:
     @staticmethod
     def get_test_plan(db: Session, plan_id: str) -> Optional[TestPlan]:
         """获取单个测试计划"""
-        return db.query(TestPlan).filter(TestPlan.id == plan_id).first()
+        plan = db.query(TestPlan).filter(TestPlan.id == plan_id).first()
+        if plan:
+            # 检查并更新超时状态
+            TestPlanService._check_and_update_overdue_plans(db, [plan])
+        return plan
 
     @staticmethod
     def create_test_plan(
@@ -133,7 +141,7 @@ class TestPlanService:
                     # 如果是date对象，转换为datetime
                     start_date = datetime.combine(start_date_str, datetime.min.time())
             except (ValueError, AttributeError) as e:
-                print(f"解析开始日期失败: {e}, 原始值: {plan_data.get('startDate')}")
+                logger.warning(f"解析开始日期失败: {e}, 原始值: {plan_data.get('startDate')}")
                 start_date = None
 
         end_date = None
@@ -148,7 +156,7 @@ class TestPlanService:
                     # 如果是date对象，转换为datetime
                     end_date = datetime.combine(end_date_str, datetime.min.time())
             except (ValueError, AttributeError) as e:
-                print(f"解析结束日期失败: {e}, 原始值: {plan_data.get('endDate')}")
+                logger.warning(f"解析结束日期失败: {e}, 原始值: {plan_data.get('endDate')}")
                 end_date = None
 
         # 创建测试计划
@@ -218,7 +226,7 @@ class TestPlanService:
                     elif hasattr(start_date_str, 'date'):
                         test_plan.start_date = start_date_str.date()
                 except (ValueError, AttributeError) as e:
-                    print(f"解析开始日期失败: {e}, 原始值: {plan_data.get('startDate')}")
+                    logger.warning(f"解析开始日期失败: {e}, 原始值: {plan_data.get('startDate')}")
             else:
                 test_plan.start_date = None
         
@@ -234,7 +242,7 @@ class TestPlanService:
                     elif hasattr(end_date_str, 'date'):
                         test_plan.end_date = end_date_str.date()
                 except (ValueError, AttributeError) as e:
-                    print(f"解析结束日期失败: {e}, 原始值: {plan_data.get('endDate')}")
+                    logger.warning(f"解析结束日期失败: {e}, 原始值: {plan_data.get('endDate')}")
             else:
                 test_plan.end_date = None
         
@@ -533,4 +541,34 @@ class TestPlanService:
         db.commit()
 
         return new_plan
+
+    @staticmethod
+    def _check_and_update_overdue_plans(db: Session, plans: List[TestPlan]):
+        """
+        检查并更新超时计划状态
+        如果计划超过结束时间且还有用例未完成（execution_status为pending），则将状态改为overdue
+        """
+        today = date.today()
+        
+        for plan in plans:
+            # 只检查有结束日期的计划
+            if not plan.end_date:
+                continue
+            
+            # 检查是否超过结束时间
+            if plan.end_date < today:
+                # 检查是否还有未完成的用例（execution_status为pending）
+                pending_cases = db.query(PlanCaseRelation).filter(
+                    and_(
+                        PlanCaseRelation.plan_id == plan.id,
+                        PlanCaseRelation.execution_status == "pending"
+                    )
+                ).count()
+                
+                # 如果有未完成的用例，且计划状态不是completed，则标记为overdue
+                if pending_cases > 0 and plan.status not in ["completed", "overdue"]:
+                    logger.info(f"计划 {plan.id} ({plan.name}) 已超过结束时间且还有 {pending_cases} 个用例未完成，状态更新为 overdue")
+                    plan.status = "overdue"
+                    db.commit()
+                    db.refresh(plan)
 

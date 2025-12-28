@@ -25,6 +25,7 @@ class TestCaseBase(BaseModel):
     module_path: Optional[str] = None
     level: Optional[str] = None
     tags: Optional[List[str]] = None
+    is_automated: bool = False  # 是否自动化，默认否
     
     @field_validator('steps', mode='before')
     @classmethod
@@ -108,6 +109,7 @@ class TestCaseUpdate(BaseModel):
     status: Optional[str] = None
     tags: Optional[List[str]] = None
     module_id: Optional[str] = None  # 支持移动用例到不同模块
+    is_automated: Optional[bool] = None  # 是否自动化
 
 
 class TestCaseResponse(TestCaseBase):

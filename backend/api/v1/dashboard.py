@@ -9,6 +9,7 @@ from models.project import Project
 from models.test_case import TestCase
 from models.test_plan import TestPlan
 from models.test_execution import TestExecution
+from core.logger import logger
 from typing import Optional
 from datetime import datetime, timedelta
 import math
@@ -65,7 +66,7 @@ async def get_overview_stats(
             "monthlyCases": monthly_cases
         }
         
-        print(f"仪表盘概览统计 - 项目总数: {total_projects}, 活跃计划: {active_plans}, 成功率: {success_rate}, 本月用例: {monthly_cases}")
+        logger.debug(f"仪表盘概览统计 - 项目总数: {total_projects}, 活跃计划: {active_plans}, 成功率: {success_rate}, 本月用例: {monthly_cases}")
         
         return APIResponse(
             status=ResponseStatus.SUCCESS,
@@ -73,7 +74,7 @@ async def get_overview_stats(
             data=result_data
         )
     except Exception as e:
-        print(f"获取概览统计失败: {e}")
+        logger.error(f"获取概览统计失败: {e}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -138,7 +139,7 @@ async def get_trends(
             }
         )
     except Exception as e:
-        print(f"获取趋势数据失败: {e}")
+        logger.error(f"获取趋势数据失败: {e}")
         # 返回空数据
         return APIResponse(
             status=ResponseStatus.SUCCESS,
@@ -207,7 +208,7 @@ async def get_status_distribution(
             data=data
         )
     except Exception as e:
-        print(f"获取状态分布失败: {e}")
+        logger.error(f"获取状态分布失败: {e}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -269,7 +270,7 @@ async def get_execution_analysis(
             }
         )
     except Exception as e:
-        print(f"获取执行分析失败: {e}")
+        logger.error(f"获取执行分析失败: {e}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -345,7 +346,7 @@ async def get_recent_activities(
             data=activities[:limit]
         )
     except Exception as e:
-        print(f"获取最近活动失败: {e}")
+        logger.error(f"获取最近活动失败: {e}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -451,7 +452,7 @@ async def get_project_stats(
             }
         )
     except Exception as e:
-        print(f"获取项目统计失败: {e}")
+        logger.error(f"获取项目统计失败: {e}")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",

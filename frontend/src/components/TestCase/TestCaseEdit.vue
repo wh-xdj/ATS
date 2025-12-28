@@ -85,6 +85,18 @@
             </a-col>
           </a-row>
 
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="是否自动化" name="isAutomated">
+                <a-switch
+                  v-model:checked="formData.isAutomated"
+                  checked-children="是"
+                  un-checked-children="否"
+                />
+              </a-form-item>
+            </a-col>
+          </a-row>
+
           <a-form-item label="需求关联" name="requirementRef">
             <a-input
               v-model:value="formData.requirementRef"
@@ -395,7 +407,8 @@ const formData = reactive({
   expectedResult: '',
   requirementRef: '',
   tags: [] as string[],
-  steps: [] as TestCaseStep[]
+  steps: [] as TestCaseStep[],
+  isAutomated: false
 })
 
 // 通用标签
@@ -453,6 +466,7 @@ const loadTestCase = async () => {
     formData.requirementRef = data.requirementRef || data.requirement_ref || ''
     formData.tags = data.tags || []
     formData.steps = data.steps || []
+    formData.isAutomated = data.isAutomated ?? data.is_automated ?? false
   } catch (error) {
     console.error('Failed to load test case:', error)
     message.error('加载用例失败')
@@ -533,7 +547,8 @@ const handleSave = async () => {
       expected_result: formData.expectedResult && formData.expectedResult.trim() !== '' ? formData.expectedResult.trim() : null,
       requirement_ref: formData.requirementRef && formData.requirementRef.trim() !== '' ? formData.requirementRef.trim() : null,
       tags: Array.isArray(formData.tags) ? formData.tags : [],
-      steps: processedSteps  // 确保始终是数组
+      steps: processedSteps,  // 确保始终是数组
+      is_automated: formData.isAutomated ?? false
     }
     
     // 移除 undefined 值，但保留 null 值（因为 module_id 等字段需要 null）
@@ -722,7 +737,8 @@ defineExpose({
       expectedResult: '',
       requirementRef: '',
       tags: [],
-      steps: []
+      steps: [],
+      isAutomated: false
     })
   }
 })

@@ -140,11 +140,13 @@ interface Props {
   visible: boolean
   projectId: string
   selectedCases?: TestCase[]
+  selectedCaseIds?: string[]  // 支持直接传入已选中的用例ID列表
+  filterAutomated?: boolean  // 是否只显示自动化用例
 }
 
 interface Emits {
   (e: 'update:visible', visible: boolean): void
-  (e: 'confirm', cases: TestCase[]): void
+  (e: 'confirm', caseIds: string[], cases: TestCase[]): void
 }
 
 const props = defineProps<Props>()
@@ -285,6 +287,11 @@ const filteredModuleTree = computed(() => {
 const filteredCases = computed(() => {
   let filtered = [...allCases.value]
 
+  // 如果设置了只显示自动化用例，先过滤
+  if (props.filterAutomated) {
+    filtered = filtered.filter(caseItem => caseItem.isAutomated || caseItem.is_automated)
+  }
+
   // 模块筛选
   const selectedKey = selectedModuleKeys.value[0]
   if (selectedKey && selectedKey !== 'all') {
@@ -382,7 +389,9 @@ const loadTestCases = async () => {
     pagination.total = allCases.value.length
 
     // 设置已选中的用例（包括已存在的）
-    if (props.selectedCases && props.selectedCases.length > 0) {
+    if (props.selectedCaseIds && props.selectedCaseIds.length > 0) {
+      selectedCaseIds.value = [...props.selectedCaseIds]
+    } else if (props.selectedCases && props.selectedCases.length > 0) {
       selectedCaseIds.value = [...props.selectedCases.map(c => c.id)]
     }
   } catch (error) {
@@ -423,8 +432,9 @@ const resetFilters = () => {
 }
 
 const handleConfirm = () => {
-  // 只返回新选择的用例（不包括已存在的）
-  emit('confirm', newSelectedCases.value)
+  // 返回选中的用例ID列表和用例对象
+  const selectedCases = allCases.value.filter(c => selectedCaseIds.value.includes(c.id))
+  emit('confirm', selectedCaseIds.value, selectedCases)
 }
 
 const handleCancel = () => {

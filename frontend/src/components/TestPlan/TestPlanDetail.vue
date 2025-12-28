@@ -193,13 +193,19 @@ const executionPagination = ref({
   total: 0
 })
 
-// 执行历史表格列
+// 执行历史表格列（改为显示测试套执行记录）
 const executionColumns = [
   {
-    title: '执行ID',
-    dataIndex: 'id',
-    key: 'id',
-    width: 100
+    title: '用例名称',
+    dataIndex: 'caseName',
+    key: 'caseName',
+    width: 200
+  },
+  {
+    title: '执行环境',
+    dataIndex: 'environmentName',
+    key: 'environmentName',
+    width: 150
   },
   {
     title: '执行结果',

@@ -61,6 +61,11 @@
                 {{ getStatusLabel(testCase.status) }}
               </a-tag>
             </a-descriptions-item>
+            <a-descriptions-item label="是否自动化">
+              <a-tag :color="(testCase.isAutomated ?? testCase.is_automated) ? 'green' : 'default'">
+                {{ (testCase.isAutomated ?? testCase.is_automated) ? '是' : '否' }}
+              </a-tag>
+            </a-descriptions-item>
             <a-descriptions-item label="所属模块">
               {{ testCase.modulePath || '未分类' }}
             </a-descriptions-item>

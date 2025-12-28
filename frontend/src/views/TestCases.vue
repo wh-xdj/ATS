@@ -271,6 +271,12 @@
                 </a-space>
               </template>
               
+              <template v-else-if="column.key === 'isAutomated'">
+                <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
+                  {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
+                </a-tag>
+              </template>
+              
               <template v-else-if="column.key === 'createdBy'">
                 {{ getDisplayName(record.createdBy) }}
               </template>
@@ -593,6 +599,18 @@ const allColumns = [
     width: 120,
     ellipsis: true,
     defaultVisible: false
+  },
+  {
+    title: '是否自动化',
+    dataIndex: 'isAutomated',
+    key: 'isAutomated',
+    width: 100,
+    align: 'center' as const,
+    filters: [
+      { text: '是', value: true },
+      { text: '否', value: false }
+    ],
+    defaultVisible: true
   },
   {
     title: '创建人',

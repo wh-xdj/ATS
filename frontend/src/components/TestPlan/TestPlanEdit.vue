@@ -193,6 +193,12 @@
                 {{ record.moduleName || '-' }}
               </template>
 
+              <template v-else-if="column.key === 'isAutomated'">
+                <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
+                  {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
+                </a-tag>
+              </template>
+
               <template v-else-if="column.key === 'estimatedDuration'">
                 {{ formatDuration(record.estimatedDuration) }}
               </template>
@@ -403,6 +409,13 @@ const caseColumns = [
     key: 'moduleName',
     width: 120,
     ellipsis: true
+  },
+  {
+    title: '是否自动化',
+    dataIndex: 'isAutomated',
+    key: 'isAutomated',
+    width: 100,
+    align: 'center' as const
   },
   {
     title: '预估时长',

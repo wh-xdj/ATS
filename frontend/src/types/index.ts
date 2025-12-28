@@ -54,6 +54,7 @@ export interface TestCaseStep {
 }
 
 export interface TestCase {
+  isAutomated?: boolean
   id: string
   projectId: string
   moduleId?: string

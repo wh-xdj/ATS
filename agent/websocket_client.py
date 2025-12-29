@@ -42,6 +42,7 @@ class WebSocketClient:
         self.connected = False
         self.reconnect_interval = 1  # 初始重连间隔（秒）
         self.max_reconnect_interval = 60  # 最大重连间隔（秒）
+        self.reconnect_delay = 3  # 重连延迟时间（秒），从服务器配置获取
         self._reconnect_task: Optional[asyncio.Task] = None
         self._should_reconnect = True
     
@@ -286,13 +287,25 @@ class WebSocketClient:
         
         self._reconnect_task = asyncio.create_task(self._reconnect_loop())
     
+    def set_reconnect_delay(self, delay: int) -> None:
+        """
+        设置重连延迟时间
+        
+        Args:
+            delay: 重连延迟时间（秒）
+        """
+        if delay > 0:
+            self.reconnect_delay = delay
+            if self.logger:
+                self.logger.info(f"重连延迟已设置为: {delay}秒")
+    
     async def _reconnect_loop(self) -> None:
         """重连循环"""
         if self.logger:
-            self.logger.info("开始重连...")
+            self.logger.info(f"开始重连，延迟: {self.reconnect_delay}秒...")
         
-        # 等待3秒后开始重连
-        await asyncio.sleep(3)
+        # 等待配置的重连延迟时间后开始重连
+        await asyncio.sleep(self.reconnect_delay)
         
         while self._should_reconnect and not self.connected:
             try:

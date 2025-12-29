@@ -87,7 +87,12 @@ async def websocket_route(websocket: WebSocket):
         token = params.get('token')
     
     if not token:
-        await websocket.close(code=1008, reason="Token required")
+        # 必须先accept才能关闭
+        try:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Token required")
+        except Exception as e:
+            logger.error(f"[WebSocket] 处理无token连接时出错: {e}")
         return
     
     await websocket_endpoint(websocket, token)

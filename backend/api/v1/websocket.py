@@ -19,8 +19,7 @@ class ConnectionManager:
         self.token_to_env: Dict[str, str] = {}
     
     async def connect(self, websocket: WebSocket, environment_id: str, token: str = None):
-        """接受WebSocket连接"""
-        await websocket.accept()
+        """注册WebSocket连接（连接已在外部accept）"""
         self.active_connections[environment_id] = websocket
         # 存储token映射
         if token:
@@ -98,21 +97,41 @@ async def websocket_endpoint(
     environment_id = None
     
     try:
+        # 必须先accept连接，然后才能关闭或使用
+        try:
+            await websocket.accept()
+        except Exception as e:
+            logger.error(f"[WebSocket] 接受连接失败: {e}")
+            db.close()
+            return
+        
         # 根据token查找环境
         environment = EnvironmentService.get_environment_by_token(db, token)
         
         if not environment:
-            await websocket.close(code=1008, reason="Invalid token")
+            # 记录token信息用于调试
+            token_preview = token[:20] + "..." if token and len(token) > 20 else (token or "None")
+            logger.warning(f"[WebSocket] 无效的token: {token_preview} (token长度: {len(token) if token else 0})")
+            logger.warning(f"[WebSocket] 提示: Agent应使用环境管理页面生成的token，而不是JWT token")
+            # 已accept，可以关闭连接
+            try:
+                await websocket.close(code=1008, reason="Invalid token - Please use environment token, not JWT token")
+            except Exception as e:
+                logger.error(f"[WebSocket] 关闭连接时出错: {e}")
             db.close()
             return
         
         environment_id = environment.get("id")
         if not environment_id:
-            await websocket.close(code=1008, reason="Environment not found")
+            logger.warning(f"[WebSocket] 环境ID不存在")
+            try:
+                await websocket.close(code=1008, reason="Environment not found")
+            except Exception as e:
+                logger.error(f"[WebSocket] 关闭连接时出错: {e}")
             db.close()
             return
         
-        # 建立连接
+        # 建立连接（已经accept了，这里只是注册连接）
         await manager.connect(websocket, environment_id, token)
         
         # 更新在线状态
@@ -123,12 +142,32 @@ async def websocket_endpoint(
         )
         
         try:
-            # 发送欢迎消息
+            # 获取重连延迟配置（默认30秒）
+            reconnect_delay = environment.get("reconnect_delay") or "30"
+            try:
+                reconnect_delay_int = int(reconnect_delay)
+            except (ValueError, TypeError):
+                reconnect_delay_int = 30
+            
+            # 获取工作目录
+            work_dir = environment.get("remote_work_dir") or environment.get("remoteWorkDir") or ""
+            
+            # 发送欢迎消息（包含配置信息）
             await websocket.send_json({
                 "type": "welcome",
                 "message": "连接成功",
                 "environment_id": environment_id,
-                "environment_name": environment.get("name")
+                "environment_name": environment.get("name"),
+                "work_dir": work_dir,
+                "reconnect_delay": reconnect_delay_int  # 重连延迟时间（秒）
+            })
+            
+            # 发送认证成功消息（兼容旧版本agent）
+            await websocket.send_json({
+                "type": "auth_success",
+                "environment_id": environment_id,
+                "work_dir": work_dir,
+                "reconnect_delay": reconnect_delay_int  # 重连延迟时间（秒）
             })
             
             # 保持连接，接收消息
@@ -157,6 +196,10 @@ async def websocket_endpoint(
                     # 处理测试套执行结果
                     elif message.get("type") == "test_suite_result":
                         await handle_test_suite_result(db, environment_id, message)
+                    
+                    # 处理测试套实时日志
+                    elif message.get("type") == "test_suite_log":
+                        await handle_test_suite_log(db, environment_id, message)
                     
                     # 处理工作空间响应（从Agent返回）
                     elif message.get("type") in [
@@ -244,18 +287,64 @@ async def handle_test_suite_result(db: Session, environment_id: str, message: di
         # 检查是否所有用例都执行完成
         suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
         if suite:
-            # 获取所有执行记录
-            executions = TestSuiteService.get_suite_executions(db, suite_id, skip=0, limit=1000)
-            executed_case_ids = {e.case_id for e in executions["items"]}
+            # 获取最近一次执行的记录（通过executed_at时间戳判断）
+            # 找到最新的执行时间
+            from models.test_suite import TestSuiteExecution
+            from sqlalchemy import func
             
-            # 如果所有用例都已执行，更新测试套状态
-            if len(executed_case_ids) >= len(suite.case_ids):
-                # 检查是否有失败的用例
-                has_failed = any(e.result in ["failed", "error"] for e in executions["items"])
-                suite.status = "failed" if has_failed else "completed"
-                db.commit()
-                logger.info(f"[WebSocket] 测试套执行完成: suite_id={suite_id}, status={suite.status}")
+            latest_execution_time = db.query(func.max(TestSuiteExecution.executed_at)).filter(
+                TestSuiteExecution.suite_id == suite_id
+            ).scalar()
+            
+            if latest_execution_time:
+                # 获取最近一次执行的所有记录
+                latest_executions = db.query(TestSuiteExecution).filter(
+                    TestSuiteExecution.suite_id == suite_id,
+                    TestSuiteExecution.executed_at == latest_execution_time
+                ).all()
+                
+                executed_case_ids = {e.case_id for e in latest_executions}
+                
+                # 如果所有用例都已执行，更新测试套状态
+                if len(executed_case_ids) >= len(suite.case_ids):
+                    # 检查最近一次执行是否有失败的用例
+                    has_failed = any(e.result in ["failed", "error"] for e in latest_executions)
+                    suite.status = "failed" if has_failed else "completed"
+                    db.commit()
+                    logger.info(f"[WebSocket] 测试套执行完成: suite_id={suite_id}, status={suite.status}, 用例数: {len(executed_case_ids)}/{len(suite.case_ids)}")
         
     except Exception as e:
         logger.exception(f"[WebSocket] 处理测试套执行结果时出错: {e}")
+
+
+async def handle_test_suite_log(db: Session, environment_id: str, message: dict):
+    """处理测试套实时日志"""
+    from models.test_suite import TestSuite
+    
+    try:
+        suite_id = message.get("suite_id")
+        level = message.get("level", "info")
+        log_message = message.get("message", "")
+        timestamp = message.get("timestamp")
+        
+        if not suite_id:
+            logger.warning(f"[WebSocket] 测试套日志缺少suite_id: {message}")
+            return
+        
+        # 验证测试套存在
+        suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
+        if not suite:
+            logger.warning(f"[WebSocket] 测试套不存在: suite_id={suite_id}")
+            return
+        
+        # 日志会通过WebSocket实时推送给前端，这里只记录到日志系统
+        logger.debug(f"[WebSocket] 测试套日志: suite_id={suite_id}, level={level}, message={log_message[:100]}")
+        
+        # 如果日志级别是error，可以考虑更新测试套状态
+        if level == "error" and suite.status == "running":
+            # 可以根据需要更新状态，这里暂时不更新，等待最终结果
+            pass
+        
+    except Exception as e:
+        logger.exception(f"[WebSocket] 处理测试套日志时出错: {e}")
 

@@ -12,6 +12,8 @@ class EnvironmentBase(BaseModel):
     remote_work_dir: Optional[str] = None
     # 兼容前端camelCase字段名（仅用于接收，不存储）
     remoteWorkDir: Optional[str] = None
+    reconnect_delay: Optional[str] = "30"  # Agent重连延迟时间（秒）
+    reconnectDelay: Optional[str] = None  # 兼容前端camelCase
     # 兼容旧字段
     api_url: Optional[str] = None
     web_url: Optional[str] = None
@@ -48,6 +50,8 @@ class EnvironmentUpdate(BaseModel):
     remote_work_dir: Optional[str] = None
     # 兼容前端camelCase字段名（仅用于接收，不存储）
     remoteWorkDir: Optional[str] = None
+    reconnect_delay: Optional[str] = None  # Agent重连延迟时间（秒）
+    reconnectDelay: Optional[str] = None  # 兼容前端camelCase
     # 兼容旧字段
     api_url: Optional[str] = None
     web_url: Optional[str] = None
@@ -87,6 +91,7 @@ class EnvironmentResponse(EnvironmentBase):
     is_online: bool = False
     last_heartbeat: Optional[datetime] = None
     # 其他字段
+    reconnect_delay: str = "30"  # Agent重连延迟时间（秒）
     status: bool = True
     created_at: datetime
     updated_at: datetime

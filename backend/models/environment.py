@@ -17,6 +17,7 @@ class Environment(Base, BaseModel):
     
     # Agent连接信息
     token = Column(String(100), unique=True, nullable=True, index=True, comment="Agent连接Token")
+    reconnect_delay = Column(String(10), default="30", nullable=False, comment="Agent重连延迟时间（秒），默认30秒")
     
     # 创建人和更新人
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)

@@ -9,9 +9,10 @@ class TestSuiteBase(BaseModel):
     """测试套基础模式"""
     name: str
     description: Optional[str] = None
-    git_repo_url: str
-    git_branch: str = "main"
-    git_token: str
+    git_enabled: Optional[str] = "false"  # Git配置是否启用: true/false
+    git_repo_url: Optional[str] = None  # 可选
+    git_branch: Optional[str] = "main"  # 可选
+    git_token: Optional[str] = None  # 可选
     environment_id: str
     execution_command: str
     case_ids: List[str]
@@ -26,6 +27,7 @@ class TestSuiteUpdate(BaseModel):
     """更新测试套请求"""
     name: Optional[str] = None
     description: Optional[str] = None
+    git_enabled: Optional[str] = None  # Git配置是否启用: true/false
     git_repo_url: Optional[str] = None
     git_branch: Optional[str] = None
     git_token: Optional[str] = None

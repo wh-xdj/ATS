@@ -13,7 +13,7 @@ from typing import Optional
 router = APIRouter()
 
 
-@router.get("/plans/{plan_id}/suites", response_model=APIResponse)
+@router.get("/{plan_id}/suites", response_model=APIResponse)
 async def get_test_suites(
     plan_id: str,
     db: Session = Depends(get_db),
@@ -64,7 +64,7 @@ async def get_test_suite(
     )
 
 
-@router.post("/plans/{plan_id}/suites", response_model=APIResponse)
+@router.post("/{plan_id}/suites", response_model=APIResponse)
 async def create_test_suite(
     plan_id: str,
     suite_data: TestSuiteCreate,
@@ -106,8 +106,9 @@ async def update_test_suite(
 ):
     """更新测试套"""
     try:
-        # 只传递非None的字段
-        update_data = {k: v for k, v in suite_data.model_dump().items() if v is not None}
+        # 获取所有字段，包括None值（用于清除Git配置）
+        # 使用model_dump(exclude_unset=True)来区分"未设置"和"设置为None"
+        update_data = suite_data.model_dump(exclude_unset=True)
         
         suite = TestSuiteService.update_test_suite(
             db=db,
@@ -191,13 +192,16 @@ async def execute_test_suite(
             )
         
         # 构建执行任务消息
+        # 只有当git_enabled为'true'时才使用git配置
+        git_enabled = suite.git_enabled == 'true' if hasattr(suite, 'git_enabled') and suite.git_enabled else False
+        
         task_message = {
             "type": "execute_test_suite",
             "suite_id": suite.id,
             "plan_id": suite.plan_id,
-            "git_repo_url": suite.git_repo_url,
-            "git_branch": suite.git_branch,
-            "git_token": suite.git_token,
+            "git_repo_url": (suite.git_repo_url or None) if git_enabled else None,
+            "git_branch": (suite.git_branch or None) if git_enabled else None,
+            "git_token": (suite.git_token or None) if git_enabled else None,
             "execution_command": suite.execution_command,
             "case_ids": suite.case_ids,
             "executor_id": str(current_user.id)
@@ -228,6 +232,70 @@ async def execute_test_suite(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"执行测试套失败: {str(e)}"
+        )
+
+
+@router.post("/suites/{suite_id}/cancel", response_model=APIResponse)
+async def cancel_test_suite(
+    suite_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """取消测试套执行"""
+    try:
+        from models.test_suite import TestSuite
+        from api.v1.websocket import manager
+        from services.environment_service import EnvironmentService
+        
+        suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
+        if not suite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="测试套不存在"
+            )
+        
+        if suite.status != "running":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="测试套未在执行中，无法取消"
+            )
+        
+        environment = EnvironmentService.get_environment(db, suite.environment_id)
+        if not environment or not environment.get("isOnline"):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="执行环境未在线"
+            )
+        
+        # 构建取消消息
+        cancel_message = {
+            "type": "cancel_test_suite",
+            "suite_id": suite_id
+        }
+        
+        # 发送到Agent
+        success = await manager.send_message(suite.environment_id, cancel_message)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="无法发送取消指令到Agent，请确保环境在线"
+            )
+        
+        # 更新状态为pending（等待Agent确认取消）
+        suite.status = "pending"
+        db.commit()
+        
+        return APIResponse(
+            status=ResponseStatus.SUCCESS,
+            message="取消指令已发送",
+            data=serialize_model(suite, camel_case=True)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"取消测试套失败: {str(e)}"
         )
 
 

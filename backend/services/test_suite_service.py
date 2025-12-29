@@ -130,9 +130,23 @@ class TestSuiteService:
                         raise ValueError(f"用例 {case.name} 不是自动化用例")
         
         # 更新字段
+        # 注意：允许显式设置None值来清除字段（如Git配置）
+        optional_fields = ['git_repo_url', 'git_branch', 'git_token', 'description', 'git_enabled']
         for key, value in suite_data.items():
-            if hasattr(suite, key) and value is not None:
-                setattr(suite, key, value)
+            if hasattr(suite, key):
+                # 对于可选字段（git配置、description等），允许设置为None来清除
+                # 对于必填字段，None值会被忽略（不更新）
+                if value is not None:
+                    # 非None值，直接设置
+                    setattr(suite, key, value)
+                elif key in optional_fields:
+                    # None值，但字段是可选的，允许设置为None来清除
+                    # 注意：git_enabled字段如果是None，使用默认值'false'
+                    if key == 'git_enabled' and value is None:
+                        setattr(suite, key, 'false')
+                    else:
+                        setattr(suite, key, None)
+                # 其他字段如果是None，则跳过（不更新该字段）
         
         suite.updated_by = current_user_id
         suite.updated_at = datetime.utcnow()

@@ -152,6 +152,7 @@ export interface Environment {
   name: string
   tags?: string
   remoteWorkDir?: string
+  reconnectDelay?: string  // Agent重连延迟时间（秒）
   // 节点信息（从agent获取）
   nodeIp?: string
   osType?: string

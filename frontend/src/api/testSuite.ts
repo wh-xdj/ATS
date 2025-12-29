@@ -6,9 +6,10 @@ export interface TestSuite {
   planId: string
   name: string
   description?: string
-  gitRepoUrl: string
-  gitBranch: string
-  gitToken: string
+  gitEnabled?: string  // Git配置是否启用: 'true'/'false'
+  gitRepoUrl?: string  // 可选
+  gitBranch?: string  // 可选
+  gitToken?: string  // 可选
   environmentId: string
   executionCommand: string
   caseIds: string[]
@@ -36,9 +37,10 @@ export interface TestSuiteExecution {
 export interface TestSuiteCreate {
   name: string
   description?: string
-  gitRepoUrl: string
-  gitBranch: string
-  gitToken: string
+  gitEnabled?: string  // Git配置是否启用: 'true'/'false'
+  gitRepoUrl?: string  // 可选
+  gitBranch?: string  // 可选
+  gitToken?: string  // 可选
   environmentId: string
   executionCommand: string
   caseIds: string[]
@@ -82,6 +84,11 @@ export const testSuiteApi = {
   // 执行测试套
   executeTestSuite: async (suiteId: string): Promise<TestSuite> => {
     return apiClient.post(`/test-plans/suites/${suiteId}/execute`)
+  },
+
+  // 取消测试套执行
+  cancelTestSuite: async (suiteId: string): Promise<TestSuite> => {
+    return apiClient.post(`/test-plans/suites/${suiteId}/cancel`)
   },
 
   // 获取测试套执行记录

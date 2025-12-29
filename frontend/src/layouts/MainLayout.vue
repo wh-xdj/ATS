@@ -117,6 +117,7 @@ import {
   ExperimentOutlined,
   ScheduleOutlined,
   PlayCircleOutlined,
+  AppstoreOutlined,
   SettingOutlined,
   BellOutlined,
   UserOutlined,
@@ -178,6 +179,12 @@ const menuItems = [
     title: '测试计划',
     icon: ScheduleOutlined,
     path: '/test-plans'
+  },
+  {
+    key: 'test-suites',
+    title: '测试套管理',
+    icon: AppstoreOutlined,
+    path: '/test-suites'
   },
   {
     key: 'environments',

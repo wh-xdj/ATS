@@ -65,6 +65,15 @@ const routes = [
         }
       },
       {
+        path: 'test-suites',
+        name: 'TestSuites',
+        component: () => import('@views/TestSuites.vue'),
+        meta: {
+          title: '测试套管理',
+          icon: 'AppstoreOutlined'
+        }
+      },
+      {
         path: 'environments',
         name: 'Environments',
         component: () => import('@views/Environments.vue'),

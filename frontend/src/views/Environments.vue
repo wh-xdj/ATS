@@ -19,7 +19,7 @@
           :data-source="environments"
           :pagination="pagination"
           :row-key="record => record.id"
-          :scroll="{ x: 1500 }"
+          :scroll="{ x: 1000 }"
           @change="handleTableChange"
         >
           <template #bodyCell="{ column, record }">
@@ -297,6 +297,7 @@
         :loading="executionHistoryLoading"
         :pagination="executionPagination"
         :row-key="record => record.id"
+        :scroll="{ x: 760 }"
         @change="handleExecutionTableChange"
         size="middle"
       >
@@ -427,6 +428,7 @@
             :data-source="workspaceFiles"
             :pagination="false"
             :row-key="record => record.path"
+            :scroll="{ x: 730 }"
             size="small"
           >
             <template #bodyCell="{ column, record }">
@@ -539,6 +541,19 @@
           />
         </a-form-item>
 
+        <a-form-item name="reconnectDelay" label="Agent重连延迟时间（秒）" :rules="[{ required: true, message: '请输入重连延迟时间' }]">
+          <a-input-number
+            v-model:value="formData.reconnectDelay"
+            :min="1"
+            :max="3600"
+            placeholder="请输入重连延迟时间（秒），默认30秒"
+            style="width: 100%"
+          />
+          <div style="color: #999; font-size: 12px; margin-top: 4px">
+            当Agent与云端断开连接后，等待多少秒后开始重连。建议值：30-300秒
+          </div>
+        </a-form-item>
+
         <a-form-item name="description" label="描述">
           <a-textarea
             v-model:value="formData.description"
@@ -635,10 +650,18 @@ const pagination = reactive({
 })
 
 const formRef = ref()
-const formData = reactive({
+const formData = reactive<{
+  name: string
+  tags: string
+  remoteWorkDir: string
+  reconnectDelay: number | string
+  description: string
+  status: boolean
+}>({
   name: '',
   tags: '',
   remoteWorkDir: '',
+  reconnectDelay: 30,  // 默认30秒
   description: '',
   status: true
 })
@@ -654,40 +677,40 @@ const columns = [
     title: '节点名称',
     key: 'name',
     dataIndex: 'name',
-    width: 150,
+    width: 120,
     fixed: 'left' as const
   },
   {
     title: '标签',
     key: 'tags',
     dataIndex: 'tags',
-    width: 150
+    width: 120
   },
   {
     title: '远程工作目录',
     key: 'remoteWorkDir',
     dataIndex: 'remoteWorkDir',
-    width: 250,
+    width: 200,
     ellipsis: true
   },
   {
     title: '在线状态',
     key: 'isOnline',
     dataIndex: 'isOnline',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
     title: '启用状态',
     key: 'status',
     dataIndex: 'status',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
     title: '操作',
     key: 'actions',
-    width: 250,
+    width: 180,
     align: 'center' as const,
     fixed: 'right' as const
   }
@@ -732,6 +755,7 @@ const showCreateModal = () => {
   formData.name = ''
   formData.tags = ''
   formData.remoteWorkDir = ''
+  formData.reconnectDelay = 30
   formData.description = ''
   formData.status = true
   modalVisible.value = true
@@ -742,6 +766,8 @@ const editEnvironment = (environment: Environment) => {
   formData.name = environment.name
   formData.tags = environment.tags || ''
   formData.remoteWorkDir = environment.remoteWorkDir || ''
+  // 将字符串转换为数字，如果不存在则使用默认值30
+  formData.reconnectDelay = environment.reconnectDelay ? parseInt(environment.reconnectDelay, 10) || 30 : 30
   formData.description = environment.description || ''
   formData.status = environment.status
   modalVisible.value = true
@@ -752,11 +778,17 @@ const handleSubmit = async () => {
     await formRef.value?.validate()
     submitting.value = true
 
+    // 准备提交数据，将reconnectDelay转换为字符串
+    const submitData = {
+      ...formData,
+      reconnectDelay: String(formData.reconnectDelay || 30)
+    }
+
     if (editingEnvironment.value) {
-      await environmentApi.updateEnvironment(editingEnvironment.value.id, formData)
+      await environmentApi.updateEnvironment(editingEnvironment.value.id, submitData)
       message.success('环境更新成功')
     } else {
-      await environmentApi.createEnvironment(formData)
+      await environmentApi.createEnvironment(submitData)
       message.success('环境创建成功')
     }
 
@@ -884,33 +916,35 @@ const workspaceColumns = [
     title: '名称',
     key: 'name',
     dataIndex: 'name',
-    width: 300
+    width: 250,
+    ellipsis: true
   },
   {
     title: '类型',
     key: 'type',
     dataIndex: 'type',
-    width: 100,
+    width: 80,
     align: 'center' as const
   },
   {
     title: '大小',
     key: 'size',
     dataIndex: 'size',
-    width: 100,
+    width: 90,
     align: 'right' as const
   },
   {
     title: '修改时间',
     key: 'modified',
     dataIndex: 'modified',
-    width: 180
+    width: 160
   },
   {
     title: '操作',
     key: 'actions',
-    width: 200,
-    align: 'center' as const
+    width: 150,
+    align: 'center' as const,
+    fixed: 'right' as const
   }
 ]
 
@@ -1108,39 +1142,41 @@ const executionColumns = [
     title: '用例名称',
     key: 'caseName',
     dataIndex: 'caseName',
-    width: 200
+    width: 180,
+    ellipsis: true
   },
   {
     title: '执行结果',
     key: 'result',
     dataIndex: 'result',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
     title: '执行人',
     key: 'executorName',
     dataIndex: 'executorName',
-    width: 120
+    width: 100
   },
   {
     title: '执行时间',
     key: 'executedAt',
     dataIndex: 'executedAt',
-    width: 180
+    width: 160
   },
   {
     title: '执行耗时',
     key: 'duration',
     dataIndex: 'duration',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
     title: '操作',
     key: 'actions',
-    width: 150,
-    align: 'center' as const
+    width: 120,
+    align: 'center' as const,
+    fixed: 'right' as const
   }
 ]
 

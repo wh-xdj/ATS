@@ -14,6 +14,25 @@
       :label-col="{ span: 6 }"
       :wrapper-col="{ span: 18 }"
     >
+      <a-form-item label="测试计划" name="planId" v-if="!suiteId">
+        <a-select
+          v-model:value="formData.planId"
+          placeholder="请选择测试计划"
+          :loading="loadingPlans"
+          show-search
+          :filter-option="filterPlan"
+          @change="handlePlanChange"
+        >
+          <a-select-option
+            v-for="plan in plans"
+            :key="plan.id"
+            :value="plan.id"
+          >
+            {{ plan.name }} ({{ getProjectName(plan.projectId) }})
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+
       <a-form-item label="测试套名称" name="name">
         <a-input
           v-model:value="formData.name"
@@ -33,28 +52,45 @@
         />
       </a-form-item>
 
-      <a-divider>Git配置</a-divider>
+      <a-divider>
+        <a-space>
+          <span>Git配置（可选）</span>
+          <a-switch
+            :checked="enableGitConfig"
+            @change="handleGitConfigToggle"
+            size="small"
+          />
+          <span style="font-size: 12px; color: #8c8c8c;">
+            {{ enableGitConfig ? '已启用' : '未启用' }}
+          </span>
+        </a-space>
+      </a-divider>
 
-      <a-form-item label="Git仓库地址" name="gitRepoUrl">
-        <a-input
-          v-model:value="formData.gitRepoUrl"
-          placeholder="例如: https://github.com/user/repo.git"
-        />
-      </a-form-item>
+      <div v-show="enableGitConfig">
+        <a-form-item label="Git仓库地址" name="gitRepoUrl">
+          <a-input
+            v-model:value="formData.gitRepoUrl"
+            placeholder="例如: https://github.com/user/repo.git"
+          />
+        </a-form-item>
 
-      <a-form-item label="Git分支" name="gitBranch">
-        <a-input
-          v-model:value="formData.gitBranch"
-          placeholder="例如: main, master, develop"
-        />
-      </a-form-item>
+        <a-form-item label="Git分支" name="gitBranch">
+          <a-input
+            v-model:value="formData.gitBranch"
+            placeholder="例如: main, master, develop"
+          />
+        </a-form-item>
 
-      <a-form-item label="Git Token" name="gitToken">
-        <a-input-password
-          v-model:value="formData.gitToken"
-          placeholder="请输入Git访问Token"
-        />
-      </a-form-item>
+        <a-form-item label="Git Token" name="gitToken">
+          <a-input-password
+            v-model:value="formData.gitToken"
+            placeholder="请输入Git访问Token（私有仓库需要）"
+          />
+          <div style="color: #8c8c8c; margin-top: 4px; font-size: 12px;">
+            提示：公开仓库可以不填写Token
+          </div>
+        </a-form-item>
+      </div>
 
       <a-divider>执行配置</a-divider>
 
@@ -141,7 +177,7 @@
     <!-- 用例选择器 -->
     <TestCaseSelector
       v-model:visible="showCaseSelector"
-      :project-id="projectId"
+      :project-id="currentProjectId"
       :selected-case-ids="formData.caseIds"
       :filter-automated="true"
       @confirm="handleCasesSelected"
@@ -155,13 +191,16 @@ import { message } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
 import { testSuiteApi, type TestSuite, type TestSuiteCreate } from '@/api/testSuite'
 import { environmentApi } from '@/api/environment'
-import type { Environment, TestCase } from '@/types'
+import { testPlanApi } from '@/api/testPlan'
+import { testCaseApi } from '@/api/testCase'
+import { useProjectStore } from '@/stores/project'
+import type { Environment, TestCase, TestPlan } from '@/types'
 import TestCaseSelector from '@/components/TestCase/TestCaseSelector.vue'
 
 interface Props {
   visible: boolean
-  planId: string
-  projectId: string
+  planId?: string  // 编辑时传入，创建时可选
+  projectId?: string  // 已废弃，不再使用
   suiteId?: string
 }
 
@@ -188,9 +227,15 @@ const innerVisible = computed({
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const loadingEnvironments = ref(false)
+const loadingPlans = ref(false)
 const showCaseSelector = ref(false)
+const enableGitConfig = ref(false)  // Git配置开关
 
-const formData = reactive<TestSuiteCreate & { caseIds: string[] }>({
+const projectStore = useProjectStore()
+const plans = ref<(TestPlan & { projectName?: string })[]>([])
+
+const formData = reactive<TestSuiteCreate & { caseIds: string[]; planId?: string }>({
+  planId: '',
   name: '',
   description: '',
   gitRepoUrl: '',
@@ -205,21 +250,91 @@ const environments = ref<Environment[]>([])
 const selectedCases = ref<TestCase[]>([])
 
 const onlineEnvironments = computed(() => {
-  return environments.value.filter(env => env.isOnline)
+  return environments.value.filter(env => env.isOnline || env.is_online)
 })
 
+const currentProjectId = computed(() => {
+  if (props.suiteId && props.planId) {
+    // 编辑模式，从计划获取项目ID
+    const plan = plans.value.find(p => p.id === props.planId)
+    return plan?.projectId || ''
+  }
+  if (formData.planId) {
+    // 创建模式，从选中的计划获取项目ID
+    const plan = plans.value.find(p => p.id === formData.planId)
+    return plan?.projectId || ''
+  }
+  return ''
+})
+
+const getProjectName = (projectId: string | undefined): string => {
+  if (!projectId) return '未知项目'
+  const project = projectStore.projects.find(p => p.id === projectId)
+  return project?.name || '未知项目'
+}
+
+const filterPlan = (input: string, option: any) => {
+  const plan = plans.value.find(p => p.id === option.value)
+  if (!plan) return false
+  const searchText = input.toLowerCase()
+  return plan.name.toLowerCase().includes(searchText) ||
+         getProjectName(plan.projectId).toLowerCase().includes(searchText)
+}
+
+const handlePlanChange = () => {
+  // 计划改变时，清空用例选择
+  formData.caseIds = []
+  selectedCases.value = []
+}
+
+const handleGitConfigToggle = async (checked: boolean) => {
+  // 手动更新开关状态
+  enableGitConfig.value = checked
+  
+  // 注意：关闭git配置时，不清空git相关字段，只标记为未启用
+  // 这样用户重新启用时可以恢复之前的配置
+  
+  // 清除git相关字段的验证错误
+  if (formRef.value) {
+    try {
+      await formRef.value.clearValidate(['gitRepoUrl', 'gitBranch', 'gitToken'])
+    } catch (error) {
+      // 忽略清除验证时的错误
+    }
+  }
+}
+
 const formRules: Record<string, Rule[]> = {
+  planId: [
+    { required: true, message: '请选择测试计划', trigger: 'change' }
+  ],
   name: [
     { required: true, message: '请输入测试套名称', trigger: 'blur' }
   ],
   gitRepoUrl: [
-    { required: true, message: '请输入Git仓库地址', trigger: 'blur' }
+    { 
+      validator: (rule, value) => {
+        if (enableGitConfig.value && !value) {
+          return Promise.reject('请输入Git仓库地址')
+        }
+        return Promise.resolve()
+      },
+      trigger: 'blur'
+    }
   ],
   gitBranch: [
-    { required: true, message: '请输入Git分支', trigger: 'blur' }
+    { 
+      validator: (rule, value) => {
+        if (enableGitConfig.value && !value) {
+          return Promise.reject('请输入Git分支')
+        }
+        return Promise.resolve()
+      },
+      trigger: 'blur'
+    }
   ],
   gitToken: [
-    { required: true, message: '请输入Git Token', trigger: 'blur' }
+    // Git Token是可选的，即使启用了Git配置也可以不填（公开仓库）
   ],
   environmentId: [
     { required: true, message: '请选择执行环境', trigger: 'change' }
@@ -261,13 +376,75 @@ const filterEnvironment = (input: string, option: any) => {
 const loadEnvironments = async () => {
   loadingEnvironments.value = true
   try {
-    const data = await environmentApi.getEnvironments()
-    environments.value = data.items || []
+    const response = await environmentApi.getEnvironments()
+    // 处理API响应格式
+    const data = response.data || response
+    let envList = Array.isArray(data) ? data : (data.items || data.data || [])
+    
+    // 确保字段名正确映射（后端可能返回snake_case，前端需要camelCase）
+    environments.value = envList.map((env: any) => ({
+      ...env,
+      remoteWorkDir: env.remoteWorkDir || env.remote_work_dir || '',
+      nodeIp: env.nodeIp || env.node_ip || '',
+      osType: env.osType || env.os_type || '',
+      osVersion: env.osVersion || env.os_version || '',
+      cpuInfo: env.cpuInfo || env.cpu_info || null,
+      memoryInfo: env.memoryInfo || env.memory_info || null,
+      diskInfo: env.diskInfo || env.disk_info || null,
+      isOnline: env.isOnline !== undefined ? env.isOnline : (env.is_online !== undefined ? env.is_online : false),
+      lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
+    }))
+    
+    console.log('加载的环境列表:', environments.value.length, '个，在线环境:', onlineEnvironments.value.length)
   } catch (error) {
     console.error('Failed to load environments:', error)
     message.error('加载环境列表失败')
+    environments.value = []
   } finally {
     loadingEnvironments.value = false
+  }
+}
+
+const loadPlans = async () => {
+  if (props.suiteId && props.planId) {
+    // 编辑模式，只加载当前计划
+    try {
+      const plan = await testPlanApi.getTestPlan(props.planId)
+      plans.value = [plan]
+      formData.planId = plan.id
+    } catch (error) {
+      console.error('Failed to load plan:', error)
+    }
+    return
+  }
+
+  // 创建模式，加载所有计划
+  loadingPlans.value = true
+  try {
+    const allPlansList: (TestPlan & { projectName?: string })[] = []
+    
+    // 遍历所有项目，加载每个项目的测试计划
+    for (const project of projectStore.projects) {
+      try {
+        const response = await testPlanApi.getTestPlans(project.id, {
+          page: 1,
+          size: 1000
+        })
+        const projectPlans = (response.items || []).map((plan: TestPlan) => ({
+          ...plan,
+          projectName: project.name
+        }))
+        allPlansList.push(...projectPlans)
+      } catch (error) {
+        console.error(`Failed to load plans for project ${project.id}:`, error)
+      }
+    }
+    
+    plans.value = allPlansList
+  } catch (error) {
+    console.error('Failed to load plans:', error)
+  } finally {
+    loadingPlans.value = false
   }
 }
 
@@ -278,12 +455,15 @@ const loadSuite = async () => {
     const suite = await testSuiteApi.getTestSuite(props.suiteId)
     formData.name = suite.name
     formData.description = suite.description || ''
-    formData.gitRepoUrl = suite.gitRepoUrl
-    formData.gitBranch = suite.gitBranch
-    formData.gitToken = suite.gitToken
+    formData.gitRepoUrl = suite.gitRepoUrl || ''
+    formData.gitBranch = suite.gitBranch || 'main'
+    formData.gitToken = suite.gitToken || ''
     formData.environmentId = suite.environmentId
     formData.executionCommand = suite.executionCommand
     formData.caseIds = suite.caseIds || []
+    
+    // 根据git_enabled字段设置开关状态（如果不存在，则根据git配置判断）
+    enableGitConfig.value = suite.gitEnabled === 'true' || (!suite.gitEnabled && !!(suite.gitRepoUrl && suite.gitBranch))
     
     // 加载用例信息
     await loadCasesInfo()
@@ -294,20 +474,22 @@ const loadSuite = async () => {
 }
 
 const loadCasesInfo = async () => {
-  if (formData.caseIds.length === 0) {
+  if (formData.caseIds.length === 0 || !currentProjectId.value) {
     selectedCases.value = []
     return
   }
   
   try {
     // 获取项目下的所有用例，然后过滤出选中的
-    const response = await testCaseApi.getTestCases(props.projectId, {
+    const response = await testCaseApi.getTestCases(currentProjectId.value, {
       page: 1,
       size: 9999
     })
     
     const allCases = response.items || []
-    selectedCases.value = allCases.filter(c => formData.caseIds.includes(c.id))
+    // 只显示自动化用例
+    const automatedCases = allCases.filter(c => c.isAutomated || c.is_automated)
+    selectedCases.value = automatedCases.filter(c => formData.caseIds.includes(c.id))
   } catch (error) {
     console.error('Failed to load cases info:', error)
     // 如果加载失败，至少显示ID
@@ -320,9 +502,17 @@ const loadCasesInfo = async () => {
 }
 
 const handleCasesSelected = (caseIds: string[], cases: TestCase[]) => {
-  formData.caseIds = caseIds
-  selectedCases.value = cases
+  // 确保只添加自动化用例
+  const automatedCases = cases.filter(c => c.isAutomated || c.is_automated)
+  const automatedCaseIds = automatedCases.map(c => c.id)
+  
+  formData.caseIds = automatedCaseIds
+  selectedCases.value = automatedCases
   showCaseSelector.value = false
+  
+  if (automatedCases.length < cases.length) {
+    message.warning(`已过滤 ${cases.length - automatedCases.length} 个非自动化用例`)
+  }
 }
 
 const removeCase = (caseId: string) => {
@@ -336,25 +526,56 @@ const handleSave = async () => {
   try {
     await formRef.value.validateFields()
     
+    // 确定计划ID
+    const planId = props.suiteId ? props.planId : formData.planId
+    if (!planId) {
+      message.error('请选择测试计划')
+      return
+    }
+    
     saving.value = true
     
-    const suiteData: TestSuiteCreate = {
+    // 转换为后端期望的 snake_case 格式
+    const suiteData: any = {
       name: formData.name,
       description: formData.description || undefined,
-      gitRepoUrl: formData.gitRepoUrl,
-      gitBranch: formData.gitBranch,
-      gitToken: formData.gitToken,
-      environmentId: formData.environmentId,
-      executionCommand: formData.executionCommand,
-      caseIds: formData.caseIds
+      environment_id: formData.environmentId,
+      execution_command: formData.executionCommand,
+      case_ids: formData.caseIds,
+      plan_id: planId  // 创建时需要包含 plan_id
     }
+    
+    // 保存git配置启用状态
+    suiteData.git_enabled = enableGitConfig.value ? 'true' : 'false'
+    
+    // 无论是否启用，都保存git配置值（不清空）
+    suiteData.git_repo_url = formData.gitRepoUrl || null
+    suiteData.git_branch = formData.gitBranch || null
+    suiteData.git_token = formData.gitToken || null
     
     let suite: TestSuite
     if (props.suiteId) {
-      suite = await testSuiteApi.updateTestSuite(props.suiteId, suiteData)
+      // 更新时不需要 plan_id
+      const updateData: any = {
+        name: suiteData.name,
+        description: suiteData.description || null,
+        environment_id: suiteData.environment_id,
+        execution_command: suiteData.execution_command,
+        case_ids: suiteData.case_ids
+      }
+      
+      // 保存git配置启用状态
+      updateData.git_enabled = enableGitConfig.value ? 'true' : 'false'
+      
+      // 无论是否启用，都保存git配置值（不清空）
+      updateData.git_repo_url = formData.gitRepoUrl || null
+      updateData.git_branch = formData.gitBranch || null
+      updateData.git_token = formData.gitToken || null
+      
+      suite = await testSuiteApi.updateTestSuite(props.suiteId, updateData)
       message.success('测试套更新成功')
     } else {
-      suite = await testSuiteApi.createTestSuite(props.planId, suiteData)
+      suite = await testSuiteApi.createTestSuite(planId, suiteData)
       message.success('测试套创建成功')
     }
     
@@ -375,6 +596,7 @@ const handleSave = async () => {
 const handleCancel = () => {
   formRef.value?.resetFields()
   Object.assign(formData, {
+    planId: '',
     name: '',
     description: '',
     gitRepoUrl: '',
@@ -384,6 +606,7 @@ const handleCancel = () => {
     executionCommand: '',
     caseIds: []
   })
+  enableGitConfig.value = false
   selectedCases.value = []
   emit('update:visible', false)
   emit('cancel')
@@ -392,11 +615,14 @@ const handleCancel = () => {
 watch(() => props.visible, (val) => {
   if (val) {
     loadEnvironments()
+    loadPlans()
     if (props.suiteId) {
       loadSuite()
     } else {
       formRef.value?.resetFields()
       selectedCases.value = []
+      enableGitConfig.value = false
+      formData.planId = props.planId || ''
     }
   }
 })

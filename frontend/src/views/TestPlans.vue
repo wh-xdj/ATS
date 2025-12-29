@@ -202,11 +202,6 @@
                         完成
                       </a-menu-item>
                       <a-menu-divider />
-                      <a-menu-item key="createSuite">
-                        <template #icon><PlusOutlined /></template>
-                        创建测试套
-                      </a-menu-item>
-                      <a-menu-divider />
                       <a-menu-item key="clone">复制</a-menu-item>
                       <a-menu-item key="delete" danger v-if="canDeletePlan(record)">
                         删除
@@ -292,15 +287,6 @@
       </a-form>
     </a-modal>
 
-    <!-- 测试套编辑对话框 -->
-    <TestSuiteEdit
-      v-model:visible="testSuiteEditVisible"
-      :plan-id="selectedPlan?.id || ''"
-      :project-id="projectId || ''"
-      :suite-id="editingSuiteId"
-      @save="handleTestSuiteSaved"
-      @cancel="testSuiteEditVisible = false"
-    />
   </div>
 </template>
 
@@ -319,7 +305,6 @@ import { testPlanApi } from '@/api/testPlan'
 import { useProjectStore } from '@/stores/project'
 import TestPlanDetail from '@/components/TestPlan/TestPlanDetail.vue'
 import TestPlanEdit from '@/components/TestPlan/TestPlanEdit.vue'
-import TestSuiteEdit from '@/components/TestPlan/TestSuiteEdit.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -362,8 +347,6 @@ const dateRange = ref<[Dayjs, Dayjs] | null>(null)
 const detailDrawerVisible = ref(false)
 const editModalVisible = ref(false)
 const executeModalVisible = ref(false)
-const testSuiteEditVisible = ref(false)
-const editingSuiteId = ref<string | undefined>(undefined)
 const isEditMode = ref(false)
 const editingPlanId = ref<string | null>(null)
 const executing = ref(false)
@@ -620,9 +603,6 @@ const handleActionClick = (action: string, plan: TestPlan) => {
     case 'complete':
       completePlan(plan)
       break
-    case 'createSuite':
-      createTestSuite(plan)
-      break
     case 'clone':
       clonePlan(plan)
       break
@@ -685,22 +665,6 @@ const resumePlan = async (plan: TestPlan) => {
   } catch (error) {
     message.error('恢复计划失败')
   }
-}
-
-const createTestSuite = (plan: TestPlan) => {
-  if (!projectId.value) {
-    message.warning('请先选择项目')
-    return
-  }
-  selectedPlan.value = plan
-  editingSuiteId.value = undefined
-  testSuiteEditVisible.value = true
-}
-
-const handleTestSuiteSaved = () => {
-  testSuiteEditVisible.value = false
-  message.success('测试套保存成功')
-  // 可以刷新计划列表或显示测试套列表
 }
 
 const completePlan = async (plan: TestPlan) => {

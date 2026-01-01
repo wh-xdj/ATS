@@ -103,5 +103,19 @@ export const testSuiteApi = {
     }
     const url = `/test-plans/suites/${suiteId}/executions${queryParams.toString() ? '?' + queryParams.toString() : ''}`
     return apiClient.get(url)
+  },
+
+  // 获取测试套日志
+  getSuiteLogs: async (suiteId: string, params?: { skip?: number; limit?: number; executionId?: string; logId?: string }): Promise<PaginationResponse<{ id: string; level: string; message: string; timestamp: string; createdAt: string }>> => {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    const url = `/test-plans/suites/${suiteId}/logs${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    return apiClient.get(url)
   }
 }

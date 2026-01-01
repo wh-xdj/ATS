@@ -71,6 +71,45 @@ export const environmentApi = {
     await apiClient.post(`/environments/${id}/workspace/mkdir`, null, {
       params: { path }
     })
+  },
+  // 获取环境的测试套执行历史
+  getSuiteExecutions: async (
+    id: string,
+    params?: {
+      skip?: number
+      limit?: number
+      search?: string
+      result?: string
+      startDate?: string
+      endDate?: string
+    }
+  ): Promise<{
+    items: Array<{
+      id: string
+      suiteId: string
+      suiteName: string
+      result: string
+      executorId: string
+      executorName: string
+      executedAt: string
+      duration: string | null
+      executionId: string | null
+      caseCount: number
+    }>
+    total: number
+    skip: number
+    limit: number
+  }> => {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    const url = `/environments/${id}/suite-executions${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    return apiClient.get(url)
   }
 }
 

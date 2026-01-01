@@ -297,13 +297,17 @@
         :loading="executionHistoryLoading"
         :pagination="executionPagination"
         :row-key="record => record.id"
-        :scroll="{ x: 760 }"
+        :scroll="{ x: 1040 }"
         @change="handleExecutionTableChange"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'caseName'">
-            <a @click="viewExecutionDetail(record.id)">{{ record.caseName || '未知用例' }}</a>
+          <template v-if="column.key === 'logId'">
+            <span style="font-family: monospace; font-size: 12px;">{{ record.logId || '-' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'suiteName'">
+            {{ record.suiteName || '未知测试套' }}
           </template>
 
           <template v-else-if="column.key === 'result'">
@@ -322,10 +326,7 @@
 
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button type="link" size="small" @click="viewExecutionDetail(record.id)">
-                查看
-              </a-button>
-              <a-button type="link" size="small" @click="viewExecutionLogs(record.id)">
+              <a-button type="link" size="small" @click="viewExecutionLogs(record)">
                 日志
               </a-button>
             </a-space>
@@ -333,42 +334,6 @@
         </template>
       </a-table>
     </a-drawer>
-
-    <!-- 执行详情对话框 -->
-    <a-modal
-      v-model:visible="executionDetailModalVisible"
-      title="执行详情"
-      width="800px"
-      :footer="null"
-    >
-      <a-spin :spinning="executionDetailLoading">
-        <a-descriptions :column="1" bordered v-if="executionDetail">
-          <a-descriptions-item label="用例名称">
-            {{ executionDetail.caseName || '-' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="执行结果">
-            <a-tag :color="getExecutionResultColor(executionDetail.result)">
-              {{ getExecutionResultText(executionDetail.result) }}
-            </a-tag>
-          </a-descriptions-item>
-          <a-descriptions-item label="执行人">
-            {{ executionDetail.executorName || '-' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="执行时间">
-            {{ formatDateTime(executionDetail.executedAt) }}
-          </a-descriptions-item>
-          <a-descriptions-item label="执行耗时">
-            {{ formatExecutionDuration(executionDetail.duration) }}
-          </a-descriptions-item>
-          <a-descriptions-item label="备注">
-            {{ executionDetail.notes || '-' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="错误信息" v-if="executionDetail.errorMessage">
-            <pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto">{{ executionDetail.errorMessage }}</pre>
-          </a-descriptions-item>
-        </a-descriptions>
-      </a-spin>
-    </a-modal>
 
     <!-- 执行日志对话框 -->
     <a-modal
@@ -586,7 +551,7 @@ import {
   FileOutlined
 } from '@ant-design/icons-vue'
 import { environmentApi } from '@/api/environment'
-import { executionApi } from '@/api/execution'
+import { testSuiteApi } from '@/api/testSuite'
 import { useProjectStore } from '@/stores/project'
 import type { Environment, TestExecution } from '@/types'
 import type { Dayjs } from 'dayjs'
@@ -610,13 +575,22 @@ const startCommandData = ref<{
 // 执行历史相关
 const executionHistoryDrawerVisible = ref(false)
 const executionHistoryLoading = ref(false)
-const executionDetailLoading = ref(false)
 const executionLogLoading = ref(false)
 const currentEnvironmentId = ref<string>('')
-const executionHistory = ref<TestExecution[]>([])
-const executionDetail = ref<any>(null)
+const executionHistory = ref<Array<{
+  id: string
+  suiteId: string
+  suiteName: string
+  result: string
+  executorId: string
+  executorName: string
+  executedAt: string
+  duration: string | null
+  executionId: string | null
+  logId: string | null
+  caseCount: number
+}>>([])
 const executionLog = ref('')
-const executionDetailModalVisible = ref(false)
 const executionLogModalVisible = ref(false)
 const executionSearchValue = ref('')
 const executionResultFilter = ref<string>()
@@ -1139,10 +1113,17 @@ const formatFileSize = (bytes: number): string => {
 // 执行历史相关函数
 const executionColumns = [
   {
-    title: '用例名称',
-    key: 'caseName',
-    dataIndex: 'caseName',
-    width: 180,
+    title: 'ID',
+    key: 'logId',
+    dataIndex: 'logId',
+    width: 280,
+    ellipsis: true
+  },
+  {
+    title: '测试套名称',
+    key: 'suiteName',
+    dataIndex: 'suiteName',
+    width: 200,
     ellipsis: true
   },
   {
@@ -1174,7 +1155,7 @@ const executionColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 120,
+    width: 100,
     align: 'center' as const,
     fixed: 'right' as const
   }
@@ -1201,16 +1182,15 @@ const viewExecutionHistory = (environment: Environment) => {
 }
 
 const loadExecutionHistory = async () => {
-  if (!currentEnvironmentId.value || !projectId.value) {
+  if (!currentEnvironmentId.value) {
     return
   }
   
   executionHistoryLoading.value = true
   try {
     const params: any = {
-      page: executionPagination.current,
-      size: executionPagination.pageSize,
-      environmentId: currentEnvironmentId.value
+      skip: (executionPagination.current - 1) * executionPagination.pageSize,
+      limit: executionPagination.pageSize
     }
 
     if (executionSearchValue.value) {
@@ -1226,7 +1206,7 @@ const loadExecutionHistory = async () => {
       params.endDate = executionDateRange.value[1].format('YYYY-MM-DD')
     }
 
-    const response = await executionApi.getExecutions(projectId.value, params)
+    const response = await environmentApi.getSuiteExecutions(currentEnvironmentId.value, params)
     executionHistory.value = response.items || []
     executionPagination.total = response.total || 0
   } catch (error) {
@@ -1279,37 +1259,82 @@ const getExecutionResultText = (result: string): string => {
   return textMap[result] || result
 }
 
-const formatExecutionDuration = (duration: number | undefined): string => {
+const formatExecutionDuration = (duration: string | number | undefined | null): string => {
   if (!duration) return '-'
-  if (duration < 60) {
-    return `${duration.toFixed(1)}秒`
-  } else if (duration < 3600) {
-    return `${(duration / 60).toFixed(1)}分钟`
+  // 如果duration是字符串，尝试解析（可能是"0:01:23"格式或秒数字符串）
+  let seconds: number
+  if (typeof duration === 'string') {
+    // 尝试解析时间格式（如"0:01:23"）
+    const parts = duration.split(':')
+    if (parts.length === 3) {
+      seconds = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2])
+    } else {
+      // 尝试解析为秒数
+      seconds = parseFloat(duration)
+    }
   } else {
-    return `${(duration / 3600).toFixed(1)}小时`
+    seconds = duration
+  }
+  
+  if (isNaN(seconds) || seconds <= 0) return '-'
+  
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}秒`
+  } else if (seconds < 3600) {
+    return `${(seconds / 60).toFixed(1)}分钟`
+  } else {
+    return `${(seconds / 3600).toFixed(1)}小时`
   }
 }
 
-const viewExecutionDetail = async (executionId: string) => {
-  executionDetailLoading.value = true
-  executionDetailModalVisible.value = true
-  try {
-    const response = await executionApi.getExecution(executionId, projectId.value)
-    executionDetail.value = response
-  } catch (error) {
-    console.error('Failed to load execution detail:', error)
-    message.error('加载执行详情失败')
-  } finally {
-    executionDetailLoading.value = false
-  }
-}
-
-const viewExecutionLogs = async (executionId: string) => {
+const viewExecutionLogs = async (record: any) => {
   executionLogLoading.value = true
   executionLogModalVisible.value = true
   try {
-    const response = await executionApi.getExecutionLogs(executionId)
-    executionLog.value = response || '暂无日志'
+    // 优先使用logId获取日志，确保每条记录显示对应的日志
+    if (record.logId) {
+      // 通过logId精确查询日志记录
+      const response = await testSuiteApi.getSuiteLogs(record.suiteId, {
+        logId: record.logId,
+        skip: 0,
+        limit: 1
+      })
+      const logs = response.items || []
+      if (logs.length > 0) {
+        // 直接取该日志记录的message
+        executionLog.value = logs[0].message || '暂无日志'
+      } else {
+        executionLog.value = '暂无日志'
+      }
+    } else if (record.executionId) {
+      // 如果没有logId，使用executionId获取日志（每个execution_id只有一条记录）
+      const response = await testSuiteApi.getSuiteLogs(record.suiteId, {
+        executionId: record.executionId,
+        skip: 0,
+        limit: 1000
+      })
+      const logs = response.items || []
+      if (logs.length > 0) {
+        // 每个execution_id只有一条记录，直接取第一条的message
+        // message字段已经包含了所有日志消息（用换行符分隔）
+        executionLog.value = logs[0].message || '暂无日志'
+      } else {
+        executionLog.value = '暂无日志'
+      }
+    } else {
+      // 如果没有logId和executionId，尝试从suiteId获取最新日志
+      const response = await testSuiteApi.getSuiteLogs(record.suiteId, {
+        skip: 0,
+        limit: 1
+      })
+      const logs = response.items || []
+      if (logs.length > 0) {
+        // 只取最新的一条记录的message
+        executionLog.value = logs[0].message || '暂无日志'
+      } else {
+        executionLog.value = '暂无日志'
+      }
+    }
   } catch (error) {
     console.error('Failed to load execution logs:', error)
     message.error('加载执行日志失败')

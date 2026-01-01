@@ -255,14 +255,26 @@
       <div class="log-container">
         <a-spin :spinning="executionLogLoading">
           <div class="log-content" ref="logContentRef">
-            <div
-              v-for="(log, index) in suiteLogs"
-              :key="index"
-              :class="['log-line', `log-${log.level}`]"
-            >
-              <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
-              <span class="log-level">{{ log.level.toUpperCase() }}</span>
-              <span class="log-message">{{ log.message }}</span>
+            <div v-if="suiteLogs.length > 0">
+              <div
+                v-for="(log, index) in suiteLogs"
+                :key="index"
+                class="log-entry"
+              >
+                <div class="log-header">
+                  <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
+                </div>
+                <div class="log-message">
+                  <div
+                    v-for="(line, lineIndex) in log.message.split('\n')"
+                    :key="lineIndex"
+                    class="log-line"
+                  >
+                    <span v-if="line.trim()">{{ line }}</span>
+                    <span v-else class="log-empty-line">&nbsp;</span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div v-if="suiteLogs.length === 0 && !executionLogLoading" class="log-empty">
               暂无日志
@@ -287,6 +299,7 @@ import { testPlanApi } from '@/api/testPlan'
 import { environmentApi } from '@/api/environment'
 import { useProjectStore } from '@/stores/project'
 import TestSuiteEdit from '@/components/TestPlan/TestSuiteEdit.vue'
+import { logWebSocketManager, type LogMessage } from '@/utils/logWebSocket'
 import type { TestPlan, Project } from '@/types'
 import dayjs from 'dayjs'
 
@@ -406,9 +419,10 @@ const executionHistory = ref<TestSuiteExecution[]>([])
 const executionLog = ref('')
 const executionLogModalVisible = ref(false)
 const currentLogSuite = ref<TestSuite | null>(null)
-const suiteLogs = ref<Array<{ level: string; message: string; timestamp: string }>>([])
+const suiteLogs = ref<Array<{ message: string; timestamp: string; execution_id?: string }>>([])
 const logContentRef = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
+const currentLogHandler = ref<((message: LogMessage) => void) | null>(null)
 
 const executionPagination = reactive({
   current: 1,
@@ -675,8 +689,10 @@ const executeSuite = async (suite: TestSuite) => {
         // 如果日志对话框已打开且是当前测试套，清空日志准备接收新日志
         if (executionLogModalVisible.value && currentLogSuite.value?.id === suite.id) {
           suiteLogs.value = []
-          // 开始轮询日志
-          startLogPolling(suite.id)
+          // 确保WebSocket连接已建立
+          if (!logWebSocketManager.isConnected() || logWebSocketManager.getCurrentSuiteId() !== suite.id) {
+            await logWebSocketManager.connect(suite.id)
+          }
         }
       } catch (error: any) {
         console.error('Failed to execute suite:', error)
@@ -708,91 +724,97 @@ const cancelSuite = async (suite: TestSuite) => {
   })
 }
 
-// 日志轮询相关
-let logPollingTimer: number | null = null
-let suiteListRefreshTimer: number | null = null
-const LOG_POLLING_INTERVAL = 2000 // 2秒轮询一次
-const SUITE_LIST_REFRESH_INTERVAL = 5000 // 5秒刷新一次测试套列表
 
-const viewSuiteLogs = (suite: TestSuite) => {
+const viewSuiteLogs = async (suite: TestSuite) => {
+  // 如果之前有处理器，先移除
+  if (currentLogHandler.value) {
+    logWebSocketManager.off(currentLogHandler.value)
+    currentLogHandler.value = null
+  }
+  
   currentLogSuite.value = suite
   suiteLogs.value = []
   executionLogModalVisible.value = true
   
   // 加载历史日志
-  loadSuiteLogs(suite.id)
+  await loadSuiteLogs(suite.id)
   
-  // 如果测试套正在执行中，开始轮询日志
-  if (suite.status === 'running') {
-    startLogPolling(suite.id)
-  }
-}
-
-const startLogPolling = (suiteId: string) => {
-  // 清除之前的轮询
-  stopLogPolling()
+  // 连接日志WebSocket
+  await logWebSocketManager.connect(suite.id)
   
-  // 开始新的轮询
-  logPollingTimer = window.setInterval(() => {
-    if (executionLogModalVisible.value && currentLogSuite.value?.id === suiteId) {
-      loadSuiteLogs(suiteId)
-    } else {
-      // 如果对话框已关闭或不是当前测试套，停止轮询
-      stopLogPolling()
+  // 注册日志消息处理器
+  const logHandler = (message: LogMessage) => {
+    if (message.type === 'test_suite_log' && message.suite_id === suite.id && message.data) {
+      // 查找是否已存在相同execution_id的日志记录
+      const executionId = message.data.execution_id
+      if (executionId) {
+        const existingIndex = suiteLogs.value.findIndex(log => log.execution_id === executionId)
+        if (existingIndex >= 0) {
+          // 如果已存在，追加新的日志消息（换行分隔）
+          suiteLogs.value[existingIndex].message += '\n' + message.data.message
+          suiteLogs.value[existingIndex].timestamp = message.data.timestamp
+        } else {
+          // 如果不存在，创建新记录
+          suiteLogs.value.push({
+            message: message.data.message,
+            timestamp: message.data.timestamp,
+            execution_id: executionId
+          })
+        }
+      } else {
+        // 如果没有execution_id，追加到最后一条记录或创建新记录
+        if (suiteLogs.value.length > 0) {
+          const lastLog = suiteLogs.value[suiteLogs.value.length - 1]
+          if (!lastLog.execution_id) {
+            // 如果最后一条记录也没有execution_id，追加到它
+            lastLog.message += '\n' + message.data.message
+            lastLog.timestamp = message.data.timestamp
+          } else {
+            // 否则创建新记录
+            suiteLogs.value.push({
+              message: message.data.message,
+              timestamp: message.data.timestamp
+            })
+          }
+        } else {
+          // 如果没有记录，创建新记录
+          suiteLogs.value.push({
+            message: message.data.message,
+            timestamp: message.data.timestamp
+          })
+        }
+      }
+      
+      // 自动滚动到底部
+      if (autoScroll.value && logContentRef.value) {
+        setTimeout(() => {
+          if (logContentRef.value) {
+            logContentRef.value.scrollTop = logContentRef.value.scrollHeight
+          }
+        }, 10)
+      }
     }
-  }, LOG_POLLING_INTERVAL)
-}
-
-const stopLogPolling = () => {
-  if (logPollingTimer !== null) {
-    clearInterval(logPollingTimer)
-    logPollingTimer = null
   }
+  
+  logWebSocketManager.on(logHandler)
+  currentLogHandler.value = logHandler
 }
 
 const loadSuiteLogs = async (suiteId: string) => {
   executionLogLoading.value = true
   try {
-    // 从执行记录中获取日志（只获取最近一次执行的记录）
-    const response = await testSuiteApi.getSuiteExecutions(suiteId, {
+    // 从API获取历史日志
+    const response = await testSuiteApi.getSuiteLogs(suiteId, {
       skip: 0,
-      limit: 100
+      limit: 1000
     })
     
-    // 找到最近一次执行的时间（最新的executedAt）
-    const executions = response.items || []
-    if (executions.length === 0) {
-      suiteLogs.value = []
-      return
-    }
-    
-    // 按执行时间排序，找到最新的执行时间
-    const latestExecutionTime = executions
-      .map(e => e.executedAt)
-      .sort()
-      .reverse()[0]
-    
-    // 只从最近一次执行的记录中提取日志
-    const logs: Array<{ level: string; message: string; timestamp: string }> = []
-    const latestExecutions = executions.filter(e => e.executedAt === latestExecutionTime)
-    
-    for (const execution of latestExecutions) {
-      if (execution.logOutput) {
-        // 将日志输出按行分割
-        const lines = execution.logOutput.split('\n')
-        lines.forEach(line => {
-          if (line.trim()) {
-            logs.push({
-              level: 'info',
-              message: line,
-              timestamp: execution.executedAt
-            })
-          }
-        })
-      }
-    }
-    
-    suiteLogs.value = logs
+    const logs = response.items || []
+    suiteLogs.value = logs.map((log: any) => ({
+      message: log.message || '',
+      timestamp: log.timestamp || log.createdAt,
+      execution_id: log.execution_id
+    }))
     
     // 滚动到底部
     if (logContentRef.value) {
@@ -804,6 +826,43 @@ const loadSuiteLogs = async (suiteId: string) => {
     }
   } catch (error) {
     console.error('Failed to load suite logs:', error)
+    // 如果API不存在，尝试从执行记录获取（兼容旧版本）
+    try {
+      const response = await testSuiteApi.getSuiteExecutions(suiteId, {
+        skip: 0,
+        limit: 100
+      })
+      
+      const executions = response.items || []
+      if (executions.length === 0) {
+        suiteLogs.value = []
+        return
+      }
+      
+      const latestExecutionTime = executions
+        .map((e: TestSuiteExecution) => e.executedAt)
+        .sort()
+        .reverse()[0]
+      
+      // 从执行记录中获取日志（如果有logOutput字段）
+      // 注意：现在日志应该从TestSuiteLog表获取，这里作为fallback
+      const logs: Array<{ message: string; timestamp: string; execution_id?: string }> = []
+      const latestExecutions = executions.filter((e: TestSuiteExecution) => e.executedAt === latestExecutionTime)
+      
+      for (const execution of latestExecutions) {
+        if (execution.logOutput) {
+          // 将logOutput作为一条完整的日志记录
+          logs.push({
+            message: execution.logOutput,
+            timestamp: execution.executedAt
+          })
+        }
+      }
+      
+      suiteLogs.value = logs
+    } catch (fallbackError) {
+      console.error('Failed to load suite logs from executions:', fallbackError)
+    }
   } finally {
     executionLogLoading.value = false
   }
@@ -823,8 +882,12 @@ const closeLogModal = () => {
   executionLogModalVisible.value = false
   currentLogSuite.value = null
   
-  // 停止日志轮询
-  stopLogPolling()
+  // 取消注册处理器并断开WebSocket连接
+  if (currentLogHandler.value) {
+    logWebSocketManager.off(currentLogHandler.value)
+    currentLogHandler.value = null
+  }
+  logWebSocketManager.disconnect()
 }
 
 const formatLogTime = (timestamp: string | undefined): string => {
@@ -1010,31 +1073,16 @@ onMounted(async () => {
   await loadPlans()
   await loadAllPlans()
   await loadSuites()
-  
-  // 定期刷新测试套列表（用于更新执行状态）
-  suiteListRefreshTimer = window.setInterval(() => {
-    loadSuites()
-    
-    // 如果日志对话框打开且测试套正在执行中，刷新日志
-    if (executionLogModalVisible.value && currentLogSuite.value) {
-      const suite = suites.value.find(s => s.id === currentLogSuite.value?.id)
-      if (suite && suite.status === 'running') {
-        loadSuiteLogs(suite.id)
-      } else {
-        // 如果执行已完成，停止轮询
-        stopLogPolling()
-      }
-    }
-  }, SUITE_LIST_REFRESH_INTERVAL)
 })
 
-// 组件卸载时清理定时器
+// 组件卸载时清理
 onUnmounted(() => {
-  stopLogPolling()
-  if (suiteListRefreshTimer !== null) {
-    clearInterval(suiteListRefreshTimer)
-    suiteListRefreshTimer = null
+  // 断开WebSocket连接
+  if (currentLogHandler.value) {
+    logWebSocketManager.off(currentLogHandler.value)
+    currentLogHandler.value = null
   }
+  logWebSocketManager.disconnect()
 })
 </script>
 
@@ -1089,52 +1137,40 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-.log-line {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 2px;
-  word-break: break-all;
+.log-entry {
+  margin-bottom: 16px;
+  border-bottom: 1px solid #2d2d2d;
+  padding-bottom: 12px;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.log-header {
+  margin-bottom: 8px;
 }
 
 .log-time {
   color: #858585;
-  min-width: 80px;
-  flex-shrink: 0;
-}
-
-.log-level {
-  min-width: 50px;
-  flex-shrink: 0;
-  font-weight: 500;
-}
-
-.log-level.info {
-  color: #4ec9b0;
-}
-
-.log-level.warning {
-  color: #dcdcaa;
-}
-
-.log-level.error {
-  color: #f48771;
+  font-size: 12px;
 }
 
 .log-message {
-  flex: 1;
   white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
 }
 
-.log-line.log-info .log-level {
-  color: #4ec9b0;
+.log-line {
+  margin-bottom: 2px;
+  line-height: 1.6;
 }
 
-.log-line.log-warning .log-level {
-  color: #dcdcaa;
-}
-
-.log-line.log-error .log-level {
-  color: #f48771;
+.log-empty-line {
+  display: block;
+  height: 1.6em;
 }
 
 .log-empty {

@@ -1,8 +1,8 @@
-"""WebSocket服务器 - 用于Agent连接"""
+"""WebSocket服务器 - 用于Agent连接和前端连接"""
 from fastapi import WebSocket, WebSocketDisconnect
 from services.environment_service import EnvironmentService
 from core.logger import logger
-from typing import Dict
+from typing import Dict, List
 from sqlalchemy.orm import Session
 import json
 import asyncio
@@ -81,6 +81,56 @@ class ConnectionManager:
 
 # 全局连接管理器
 manager = ConnectionManager()
+
+
+class FrontendConnectionManager:
+    """前端WebSocket连接管理器"""
+    
+    def __init__(self):
+        # 存储前端连接: {suite_id: [websocket1, websocket2, ...]}
+        self.frontend_connections: Dict[str, List[WebSocket]] = {}
+    
+    async def connect(self, websocket: WebSocket, suite_id: str):
+        """注册前端WebSocket连接"""
+        if suite_id not in self.frontend_connections:
+            self.frontend_connections[suite_id] = []
+        
+        self.frontend_connections[suite_id].append(websocket)
+        logger.info(f"[Frontend WebSocket] 订阅测试套 {suite_id} 日志，当前连接数: {len(self.frontend_connections[suite_id])}")
+    
+    def disconnect(self, websocket: WebSocket, suite_id: str):
+        """断开前端WebSocket连接"""
+        if suite_id in self.frontend_connections:
+            connections = self.frontend_connections[suite_id]
+            if websocket in connections:
+                connections.remove(websocket)
+                if not connections:
+                    del self.frontend_connections[suite_id]
+                logger.info(f"[Frontend WebSocket] 取消订阅测试套 {suite_id} 日志，剩余连接数: {len(connections) if suite_id in self.frontend_connections else 0}")
+    
+    async def broadcast_log(self, suite_id: str, log_data: dict):
+        """向所有订阅该测试套日志的前端推送日志"""
+        if suite_id not in self.frontend_connections:
+            return
+        
+        disconnected = []
+        for websocket in self.frontend_connections[suite_id]:
+            try:
+                await websocket.send_json({
+                    "type": "test_suite_log",
+                    "suite_id": suite_id,
+                    "data": log_data
+                })
+            except Exception as e:
+                logger.error(f"[Frontend WebSocket] 推送日志失败: {e}")
+                disconnected.append(websocket)
+        
+        # 清理断开的连接
+        for websocket in disconnected:
+            self.disconnect(websocket, suite_id)
+
+# 全局前端连接管理器
+frontend_manager = FrontendConnectionManager()
 
 
 async def websocket_endpoint(
@@ -319,13 +369,13 @@ async def handle_test_suite_result(db: Session, environment_id: str, message: di
 
 async def handle_test_suite_log(db: Session, environment_id: str, message: dict):
     """处理测试套实时日志"""
-    from models.test_suite import TestSuite
+    from models.test_suite import TestSuite, TestSuiteLog
     
     try:
         suite_id = message.get("suite_id")
-        level = message.get("level", "info")
         log_message = message.get("message", "")
         timestamp = message.get("timestamp")
+        execution_id = message.get("execution_id")  # Agent发送的执行ID
         
         if not suite_id:
             logger.warning(f"[WebSocket] 测试套日志缺少suite_id: {message}")
@@ -337,14 +387,72 @@ async def handle_test_suite_log(db: Session, environment_id: str, message: dict)
             logger.warning(f"[WebSocket] 测试套不存在: suite_id={suite_id}")
             return
         
-        # 日志会通过WebSocket实时推送给前端，这里只记录到日志系统
-        logger.debug(f"[WebSocket] 测试套日志: suite_id={suite_id}, level={level}, message={log_message[:100]}")
+        # 解析时间戳
+        log_timestamp = datetime.utcnow()
+        if timestamp:
+            try:
+                # 处理ISO格式时间戳，支持带Z和不带Z的格式
+                if timestamp.endswith('Z'):
+                    log_timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                else:
+                    log_timestamp = datetime.fromisoformat(timestamp)
+            except Exception as e:
+                logger.warning(f"[WebSocket] 解析时间戳失败: {e}, 使用当前时间")
+                log_timestamp = datetime.utcnow()
         
-        # 如果日志级别是error，可以考虑更新测试套状态
-        if level == "error" and suite.status == "running":
-            # 可以根据需要更新状态，这里暂时不更新，等待最终结果
-            pass
+        # 查找或创建日志记录（每个execution_id只创建一条记录）
+        if execution_id:
+            log_entry = db.query(TestSuiteLog).filter(
+                TestSuiteLog.suite_id == suite_id,
+                TestSuiteLog.execution_id == execution_id
+            ).first()
+            
+            if log_entry:
+                # 如果已存在，追加日志消息（换行分隔）
+                if log_entry.message:
+                    log_entry.message += "\n" + log_message
+                else:
+                    log_entry.message = log_message
+                log_entry.timestamp = log_timestamp  # 更新最后时间戳
+            else:
+                # 如果不存在，创建新记录
+                log_entry = TestSuiteLog(
+                    suite_id=suite_id,
+                    execution_id=execution_id,
+                    message=log_message,
+                    timestamp=log_timestamp
+                )
+                db.add(log_entry)
+        else:
+            # 如果没有execution_id，记录警告并创建新记录
+            # 注意：正常情况下应该有execution_id，如果没有可能是旧版本Agent或配置问题
+            logger.warning(f"[WebSocket] 测试套日志缺少execution_id: suite_id={suite_id}, message={log_message[:50]}")
+            # 创建新记录（不追加到旧记录，确保每次执行都有独立记录）
+            log_entry = TestSuiteLog(
+                suite_id=suite_id,
+                execution_id=None,
+                message=log_message,
+                timestamp=log_timestamp
+            )
+            db.add(log_entry)
+        
+        db.commit()
+        db.refresh(log_entry)
+        
+        # 构建日志数据（用于实时推送）
+        log_data = {
+            "id": log_entry.id,
+            "message": log_message,  # 只推送新的日志消息
+            "timestamp": log_entry.timestamp.isoformat(),
+            "execution_id": execution_id
+        }
+        
+        # 推送给所有订阅该测试套日志的前端
+        await frontend_manager.broadcast_log(suite_id, log_data)
+        
+        logger.debug(f"[WebSocket] 测试套日志已存储并推送: suite_id={suite_id}, execution_id={execution_id}, message={log_message[:50]}")
         
     except Exception as e:
         logger.exception(f"[WebSocket] 处理测试套日志时出错: {e}")
+        db.rollback()
 

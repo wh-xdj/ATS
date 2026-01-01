@@ -6,11 +6,16 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from config import settings
-from database import engine, Base
+from database import engine, Base, SessionLocal
 from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace, test_suites
-from api.v1.websocket import websocket_endpoint
+from api.v1.websocket import websocket_endpoint, frontend_manager
+from core.security import verify_token
+from models import User
+from core.logger import logger
+import json
+import asyncio
 
 # 创建数据库表（开发环境）
 # 注意：这需要数据库服务已启动
@@ -96,6 +101,92 @@ async def websocket_route(websocket: WebSocket):
         return
     
     await websocket_endpoint(websocket, token)
+
+
+@app.websocket("/ws/client")
+async def frontend_websocket_route(websocket: WebSocket):
+    """前端WebSocket路由 - 用于接收实时日志"""
+    # 先接受连接
+    await websocket.accept()
+    
+    db = SessionLocal()
+    user_id = None
+    suite_id = None
+    
+    try:
+        # 从查询参数获取token和suite_id
+        query_string = websocket.url.query
+        token = None
+        suite_id = None
+        if query_string:
+            params = dict(param.split('=') for param in query_string.split('&') if '=' in param)
+            token = params.get('token')
+            suite_id = params.get('suite_id')
+        
+        if not token:
+            await websocket.close(code=1008, reason="Token required")
+            db.close()
+            return
+        
+        if not suite_id:
+            await websocket.close(code=1008, reason="Suite ID required")
+            db.close()
+            return
+        
+        # 验证用户身份
+        try:
+            user_id_str = verify_token(token, "access")
+            user = db.query(User).filter(User.id == user_id_str).first()
+            if not user:
+                await websocket.close(code=1008, reason="Invalid token")
+                db.close()
+                return
+            if not user.status:
+                await websocket.close(code=1008, reason="User account disabled")
+                db.close()
+                return
+            user_id = str(user.id)
+        except Exception as e:
+            logger.warning(f"[Frontend WebSocket] 用户认证失败: {e}")
+            await websocket.close(code=1008, reason="Invalid token")
+            db.close()
+            return
+        
+        # 注册连接
+        await frontend_manager.connect(websocket, suite_id)
+        
+        # 发送连接成功消息
+        await websocket.send_json({
+            "type": "connected",
+            "message": f"已连接到测试套 {suite_id} 的日志流"
+        })
+        
+        # 保持连接，等待断开
+        while True:
+            try:
+                # 接收心跳消息（可选）
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                try:
+                    message = json.loads(data)
+                    if message.get("type") == "ping":
+                        await websocket.send_json({"type": "pong"})
+                except json.JSONDecodeError:
+                    pass
+            except asyncio.TimeoutError:
+                # 发送心跳
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except:
+                    break
+            except WebSocketDisconnect:
+                break
+                
+    except Exception as e:
+        logger.exception(f"[Frontend WebSocket] 连接错误: {e}")
+    finally:
+        if suite_id:
+            frontend_manager.disconnect(websocket, suite_id)
+        db.close()
 
 
 @app.get("/")

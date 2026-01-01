@@ -28,6 +28,7 @@ class TestSuite(Base, BaseModel):
     plan = relationship("TestPlan", back_populates="test_suites")
     environment = relationship("Environment", back_populates="test_suites")
     executions = relationship("TestSuiteExecution", back_populates="suite", cascade="all, delete-orphan")
+    logs = relationship("TestSuiteLog", back_populates="suite", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<TestSuite(id={self.id}, name={self.name}, plan_id={self.plan_id})>"
@@ -57,4 +58,22 @@ class TestSuiteExecution(Base):
     
     def __repr__(self):
         return f"<TestSuiteExecution(id={self.id}, suite_id={self.suite_id}, case_id={self.case_id}, result={self.result})>"
+
+
+class TestSuiteLog(Base):
+    """测试套实时日志表"""
+    __tablename__ = "test_suite_logs"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    suite_id = Column(String(36), ForeignKey("test_suites.id", ondelete="CASCADE"), nullable=False, index=True)
+    execution_id = Column(String(36), nullable=True, index=True, comment="执行ID，用于关联同一次执行的所有日志")
+    message = Column(Text, nullable=False, comment="日志消息（多行，用换行符分隔）")
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # 关系
+    suite = relationship("TestSuite", back_populates="logs")
+    
+    def __repr__(self):
+        return f"<TestSuiteLog(id={self.id}, suite_id={self.suite_id})>"
 

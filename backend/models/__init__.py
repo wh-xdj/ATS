@@ -7,7 +7,7 @@ from .module import Module
 from .test_case import TestCase, CaseAttachment
 from .test_plan import TestPlan, PlanCaseRelation
 from .test_execution import TestExecution, ExecutionAttachment
-from .test_suite import TestSuite, TestSuiteExecution
+from .test_suite import TestSuite, TestSuiteExecution, TestSuiteLog
 from .test_report import TestReport
 from .environment import Environment
 from .notification import Notification
@@ -28,6 +28,7 @@ __all__ = [
     "TestReport",
     "TestSuite",
     "TestSuiteExecution",
+    "TestSuiteLog",
     "Environment",
     "Notification",
     "Role",

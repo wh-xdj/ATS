@@ -191,6 +191,10 @@ async def execute_test_suite(
                 detail="执行环境未在线"
             )
         
+        # 生成执行ID（用于关联本次执行的所有日志）
+        import uuid
+        execution_id = str(uuid.uuid4())
+        
         # 构建执行任务消息
         # 只有当git_enabled为'true'时才使用git配置
         git_enabled = suite.git_enabled == 'true' if hasattr(suite, 'git_enabled') and suite.git_enabled else False
@@ -199,6 +203,7 @@ async def execute_test_suite(
             "type": "execute_test_suite",
             "suite_id": suite.id,
             "plan_id": suite.plan_id,
+            "execution_id": execution_id,  # 添加执行ID
             "git_repo_url": (suite.git_repo_url or None) if git_enabled else None,
             "git_branch": (suite.git_branch or None) if git_enabled else None,
             "git_token": (suite.git_token or None) if git_enabled else None,
@@ -343,5 +348,48 @@ async def get_suite_executions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行记录失败: {str(e)}"
+        )
+
+
+@router.get("/suites/{suite_id}/logs", response_model=APIResponse)
+async def get_suite_logs(
+    suite_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 1000,
+    execution_id: Optional[str] = None,
+    log_id: Optional[str] = None
+):
+    """获取测试套日志"""
+    from models.test_suite import TestSuiteLog
+    from utils.serializer import serialize_model
+    
+    try:
+        query = db.query(TestSuiteLog).filter(TestSuiteLog.suite_id == suite_id)
+        
+        if log_id:
+            # 优先使用log_id查询
+            query = query.filter(TestSuiteLog.id == log_id)
+        elif execution_id:
+            query = query.filter(TestSuiteLog.execution_id == execution_id)
+        
+        total = query.count()
+        items = query.order_by(TestSuiteLog.timestamp.asc()).offset(sk  ip).limit(limit).all()
+        
+        return APIResponse(
+            status=ResponseStatus.SUCCESS,
+            message="获取成功",
+            data={
+                "items": [serialize_model(item, camel_case=True) for item in items],
+                "total": total,
+                "skip": skip,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取日志失败: {str(e)}"
         )
 

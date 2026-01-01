@@ -52,6 +52,7 @@ class Agent:
         self.monitor_task: Optional[asyncio.Task] = None
         self.running = False
         self.running_suites: Dict[str, subprocess.Popen] = {}  # suite_id -> process
+        self.suite_execution_ids: Dict[str, str] = {}  # suite_id -> execution_id
     
     def setup(self) -> None:
         """初始化设置"""
@@ -485,6 +486,7 @@ class Agent:
         
         suite_id = message.get("suite_id")
         plan_id = message.get("plan_id")
+        execution_id = message.get("execution_id")  # 从消息中获取执行ID
         git_repo_url = message.get("git_repo_url")
         git_branch = message.get("git_branch", "main")
         git_token = message.get("git_token")
@@ -493,7 +495,7 @@ class Agent:
         executor_id = message.get("executor_id", "system")
         
         if self.logger:
-            self.logger.info(f"收到测试套执行请求: suite_id={suite_id}, cases={len(case_ids)}")
+            self.logger.info(f"收到测试套执行请求: suite_id={suite_id}, execution_id={execution_id}, cases={len(case_ids)}")
             if git_repo_url:
                 self.logger.info(f"Git配置: {git_repo_url} (分支: {git_branch})")
             else:
@@ -511,19 +513,14 @@ class Agent:
                 self.logger.warning(f"测试套 {suite_id} 正在执行中，忽略重复请求")
             return
         
-        # 发送开始执行的消息
-        await self.ws_client.send_message({
-            "type": "test_suite_log",
-            "suite_id": suite_id,
-            "level": "info",
-            "message": f"开始执行测试套: {suite_id}",
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        })
+        # 存储execution_id
+        self.suite_execution_ids[suite_id] = execution_id
         
-        # 在后台执行测试套
+        # 在后台执行测试套（先启动任务，然后在任务内部发送开始日志）
         asyncio.create_task(self._execute_test_suite_async(
             suite_id=suite_id,
             plan_id=plan_id,
+            execution_id=execution_id,  # 传递执行ID
             git_repo_url=git_repo_url,
             git_branch=git_branch,
             git_token=git_token,
@@ -546,51 +543,78 @@ class Agent:
         if suite_id not in self.running_suites:
             if self.logger:
                 self.logger.warning(f"测试套 {suite_id} 不在执行中")
+            # 获取execution_id（如果存在）
+            execution_id = self.suite_execution_ids.get(suite_id)
             if self.ws_client:
-                await self.ws_client.send_message({
+                log_msg = {
                     "type": "test_suite_log",
                     "suite_id": suite_id,
                     "level": "warning",
                     "message": f"测试套 {suite_id} 不在执行中，无法取消",
                     "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
+                }
+                if execution_id:
+                    log_msg["execution_id"] = execution_id
+                await self.ws_client.send_message(log_msg)
             return
         
         process = self.running_suites[suite_id]
+        execution_id = self.suite_execution_ids.get(suite_id)  # 获取execution_id
         
         try:
             # 发送取消日志
             if self.ws_client:
-                await self.ws_client.send_message({
+                log_msg = {
                     "type": "test_suite_log",
                     "suite_id": suite_id,
                     "level": "warning",
                     "message": "收到取消指令，正在终止执行...",
                     "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
+                }
+                if execution_id:
+                    log_msg["execution_id"] = execution_id
+                await self.ws_client.send_message(log_msg)
             
-            # 终止进程
-            process.terminate()
+            # 先从running_suites中移除，这样读取循环会检测到并退出
+            del self.running_suites[suite_id]
+            
+            # 终止进程（发送SIGTERM）
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                # 进程已经不存在
+                if self.logger:
+                    self.logger.warning(f"进程 {suite_id} 已经不存在")
             
             # 等待进程结束，如果5秒后还没结束，强制杀死
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+                if self.logger:
+                    self.logger.warning(f"进程 {suite_id} 在5秒内未结束，强制杀死")
+                try:
+                    process.kill()
+                    process.wait()
+                except ProcessLookupError:
+                    # 进程已经不存在
+                    pass
             
             # 发送取消完成日志
             if self.ws_client:
-                await self.ws_client.send_message({
+                log_msg = {
                     "type": "test_suite_log",
                     "suite_id": suite_id,
                     "level": "info",
                     "message": "测试套执行已取消",
                     "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
+                }
+                if execution_id:
+                    log_msg["execution_id"] = execution_id
+                await self.ws_client.send_message(log_msg)
             
-            # 清理
-            del self.running_suites[suite_id]
+            # 清理execution_id
+            if suite_id in self.suite_execution_ids:
+                del self.suite_execution_ids[suite_id]
             
             if self.logger:
                 self.logger.info(f"测试套 {suite_id} 已取消")
@@ -599,18 +623,22 @@ class Agent:
             if self.logger:
                 self.logger.error(f"取消测试套失败: {e}")
             if self.ws_client:
-                await self.ws_client.send_message({
+                log_msg = {
                     "type": "test_suite_log",
                     "suite_id": suite_id,
                     "level": "error",
                     "message": f"取消测试套失败: {str(e)}",
                     "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
+                }
+                if execution_id:
+                    log_msg["execution_id"] = execution_id
+                await self.ws_client.send_message(log_msg)
     
     async def _execute_test_suite_async(
         self,
         suite_id: str,
         plan_id: Optional[str],
+        execution_id: str,  # 添加执行ID参数
         git_repo_url: Optional[str],
         git_branch: Optional[str],
         git_token: Optional[str],
@@ -629,9 +657,32 @@ class Agent:
         suite_work_dir = self.work_dir / "suites" / suite_id
         suite_work_dir.mkdir(parents=True, exist_ok=True)
         
+        # 辅助函数：发送日志（自动包含execution_id和时间戳）
+        async def send_log(level: str, message: str):
+            """发送日志消息，自动包含execution_id和时间戳"""
+            if self.ws_client:
+                # 为每行日志添加时间戳前缀
+                timestamp = datetime.utcnow()
+                timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # 保留毫秒（3位）
+                timestamp_prefix = f"[{timestamp_str}]"
+                
+                # 如果消息包含多行，为每行添加时间戳
+                lines = message.split('\n')
+                formatted_lines = [f"{timestamp_prefix} {line}" for line in lines]
+                formatted_message = '\n'.join(formatted_lines)
+                
+                await self.ws_client.send_message({
+                    "type": "test_suite_log",
+                    "suite_id": suite_id,
+                    "execution_id": execution_id,
+                    "level": level,
+                    "message": formatted_message,
+                    "timestamp": timestamp.isoformat() + "Z"
+                })
+        
         try:
             if self.logger:
-                self.logger.info(f"开始执行测试套: {suite_id}")
+                self.logger.info(f"开始执行测试套: {suite_id}, execution_id={execution_id}")
                 self.logger.info(f"工作目录: {suite_work_dir}")
             
             # 检查是否有git配置
@@ -643,14 +694,7 @@ class Agent:
             else:
                 if self.logger:
                     self.logger.info("未配置Git仓库，将直接在工作目录中执行命令")
-                if self.ws_client:
-                    await self.ws_client.send_message({
-                        "type": "test_suite_log",
-                        "suite_id": suite_id,
-                        "level": "info",
-                        "message": "未配置Git仓库，将直接在工作目录中执行命令",
-                        "timestamp": datetime.utcnow().isoformat() + "Z"
-                    })
+                await send_log("info", "未配置Git仓库，将直接在工作目录中执行命令")
             
             # 1. 克隆或更新代码（仅在配置了git时执行）
             # 注意：所有git操作（fetch, checkout, pull, clone）都在此if块内
@@ -660,14 +704,7 @@ class Agent:
                 if repo_dir.exists():
                     # 如果已存在，更新代码
                     log_msg = "代码目录已存在，更新代码..."
-                    if self.ws_client:
-                        await self.ws_client.send_message({
-                            "type": "test_suite_log",
-                            "suite_id": suite_id,
-                            "level": "info",
-                            "message": log_msg,
-                            "timestamp": datetime.utcnow().isoformat() + "Z"
-                        })
+                    await send_log("info", log_msg)
                     if self.logger:
                         self.logger.info(log_msg)
                     try:
@@ -679,14 +716,8 @@ class Agent:
                             text=True,
                             timeout=60
                         )
-                        if fetch_result.stdout and self.ws_client:
-                            await self.ws_client.send_message({
-                                "type": "test_suite_log",
-                                "suite_id": suite_id,
-                                "level": "info",
-                                "message": fetch_result.stdout.strip(),
-                                "timestamp": datetime.utcnow().isoformat() + "Z"
-                            })
+                        if fetch_result.stdout:
+                            await send_log("info", fetch_result.stdout.strip())
                         
                         checkout_result = subprocess.run(
                             ["git", "checkout", git_branch],
@@ -696,14 +727,8 @@ class Agent:
                             text=True,
                             timeout=30
                         )
-                        if checkout_result.stdout and self.ws_client:
-                            await self.ws_client.send_message({
-                                "type": "test_suite_log",
-                                "suite_id": suite_id,
-                                "level": "info",
-                                "message": checkout_result.stdout.strip(),
-                                "timestamp": datetime.utcnow().isoformat() + "Z"
-                            })
+                        if checkout_result.stdout:
+                            await send_log("info", checkout_result.stdout.strip())
                         
                         pull_result = subprocess.run(
                             ["git", "pull", "origin", git_branch],
@@ -713,24 +738,11 @@ class Agent:
                             text=True,
                             timeout=60
                         )
-                        if pull_result.stdout and self.ws_client:
-                            await self.ws_client.send_message({
-                                "type": "test_suite_log",
-                                "suite_id": suite_id,
-                                "level": "info",
-                                "message": pull_result.stdout.strip(),
-                                "timestamp": datetime.utcnow().isoformat() + "Z"
-                            })
+                        if pull_result.stdout:
+                            await send_log("info", pull_result.stdout.strip())
                     except subprocess.CalledProcessError as e:
                         error_msg = f"更新代码失败，尝试重新克隆: {e}"
-                        if self.ws_client:
-                            await self.ws_client.send_message({
-                                "type": "test_suite_log",
-                                "suite_id": suite_id,
-                                "level": "warning",
-                                "message": error_msg,
-                                "timestamp": datetime.utcnow().isoformat() + "Z"
-                            })
+                        await send_log("warning", error_msg)
                         if self.logger:
                             self.logger.warning(error_msg)
                         shutil.rmtree(repo_dir)
@@ -739,14 +751,7 @@ class Agent:
                 if not repo_dir.exists() or not (repo_dir / ".git").exists():
                     # 克隆代码
                     log_msg = f"克隆代码仓库: {git_repo_url} (分支: {git_branch})"
-                    if self.ws_client:
-                        await self.ws_client.send_message({
-                            "type": "test_suite_log",
-                            "suite_id": suite_id,
-                            "level": "info",
-                            "message": log_msg,
-                            "timestamp": datetime.utcnow().isoformat() + "Z"
-                        })
+                    await send_log("info", log_msg)
                     if self.logger:
                         self.logger.info(log_msg)
                     
@@ -772,32 +777,20 @@ class Agent:
                         text=True,
                         timeout=300
                     )
-                    if clone_result.stdout and self.ws_client:
-                        await self.ws_client.send_message({
-                            "type": "test_suite_log",
-                            "suite_id": suite_id,
-                            "level": "info",
-                            "message": clone_result.stdout.strip(),
-                            "timestamp": datetime.utcnow().isoformat() + "Z"
-                        })
+                    if clone_result.stdout:
+                        await send_log("info", clone_result.stdout.strip())
             else:
                 # 没有git配置，直接使用工作目录
                 repo_dir = suite_work_dir
             
             # 2. 执行命令
             log_msg = f"开始执行命令: {execution_command}"
-            if self.ws_client:
-                await self.ws_client.send_message({
-                    "type": "test_suite_log",
-                    "suite_id": suite_id,
-                    "level": "info",
-                    "message": log_msg,
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
+            await send_log("info", log_msg)
             if self.logger:
                 self.logger.info(log_msg)
             
             # 在repo目录中执行命令
+            # 使用行缓冲模式，确保实时输出
             process = subprocess.Popen(
                 execution_command,
                 shell=True,
@@ -805,7 +798,8 @@ class Agent:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,  # 行缓冲
+                universal_newlines=True
             )
             
             log_output = ""
@@ -814,28 +808,81 @@ class Agent:
             # 存储进程以便取消
             self.running_suites[suite_id] = process
             
-            # 实时读取输出并发送日志
-            for line in process.stdout:
-                print("line", line)
-                if line:
-                    log_output += line
-                    # 实时发送日志到服务器
-                    if self.ws_client:
-                        await self.ws_client.send_message({
-                            "type": "test_suite_log",
-                            "suite_id": suite_id,
-                            "level": "info",
-                            "message": line.rstrip(),
-                            "timestamp": datetime.utcnow().isoformat() + "Z"
-                        })
-                    if self.logger:
-                        self.logger.debug(f"[测试套执行] {line.strip()}")
+            # 使用异步方式读取输出，避免阻塞
+            async def read_stdout():
+                """异步读取进程输出"""
+                nonlocal log_output  # 声明使用外部作用域的log_output变量
+                process_exited = process.poll() is not None
+                while True:
+                    # 检查进程是否已被取消（从running_suites中移除）
+                    if suite_id not in self.running_suites:
+                        if self.logger:
+                            self.logger.info(f"测试套 {suite_id} 已被取消，停止读取输出")
+                        break
+                    
+                    # 检查进程是否已结束
+                    process_exited = process.poll() is not None
+                    
+                    # 使用select检查是否有数据可读（避免完全阻塞）
+                    import select
+                    import os
+                    
+                    line = None
+                    try:
+                        # 检查文件描述符是否有数据可读
+                        if os.name == 'posix':  # Unix/Linux/Mac
+                            # 获取文件描述符
+                            fd = process.stdout.fileno()
+                            ready, _, _ = select.select([fd], [], [], 0.1)
+                            if ready:
+                                # 有数据可读，读取一行
+                                line = process.stdout.readline()
+                        else:  # Windows
+                            # Windows不支持select，使用readline（会短暂阻塞）
+                            # 但通过检查进程状态来避免长时间阻塞
+                            line = process.stdout.readline()
+                    except (ValueError, OSError) as e:
+                        # 文件描述符可能已关闭
+                        if self.logger:
+                            self.logger.debug(f"读取stdout时出错（可能已关闭）: {e}")
+                        break
+                    
+                    if line:
+                        log_output += line
+                        # 实时发送日志到服务器（使用send_log函数，自动包含execution_id）
+                        await send_log("info", line.rstrip())
+                        if self.logger:
+                            self.logger.debug(f"[测试套执行] {line.strip()}")
+                    elif process_exited:
+                        # 进程已结束且没有更多输出，退出循环
+                        # 注意：不在进程结束时读取"剩余输出"，因为循环中已经读取了所有输出
+                        break
+                    else:
+                        # 没有输出但进程还在运行，短暂休眠避免CPU占用过高
+                        await asyncio.sleep(0.1)
             
-            process.wait()
+            # 运行异步读取任务
+            await read_stdout()
+            
+            # 检查是否被取消
+            was_cancelled = suite_id not in self.running_suites
+            
+            # 等待进程结束（如果还没结束且未被取消）
+            if not was_cancelled and process.poll() is None:
+                process.wait()
+            
+            # 如果被取消，不继续上报结果
+            if was_cancelled:
+                if self.logger:
+                    self.logger.info(f"测试套 {suite_id} 已被取消，不上报执行结果")
+                return
             
             # 执行完成后移除
             if suite_id in self.running_suites:
                 del self.running_suites[suite_id]
+            # 清理execution_id
+            if suite_id in self.suite_execution_ids:
+                del self.suite_execution_ids[suite_id]
             end_time = datetime.now()
             duration = str(end_time - start_time)
             
@@ -843,6 +890,10 @@ class Agent:
             # 这里简化处理：如果命令执行成功，所有用例标记为passed；失败则标记为failed
             result = "passed" if process.returncode == 0 else "failed"
             error_message = None if process.returncode == 0 else f"命令执行失败，退出码: {process.returncode}"
+            
+            # 发送执行完成日志
+            result_msg = f"测试套执行完成: 结果={result}, 用例数={len(case_ids)}, 耗时={duration}"
+            await send_log("info", result_msg)
             
             # 为每个用例上报执行结果
             for case_id in case_ids:
@@ -862,6 +913,7 @@ class Agent:
         
         except subprocess.TimeoutExpired:
             error_msg = "执行超时"
+            await send_log("error", f"测试套执行超时: {error_msg}")
             if self.logger:
                 self.logger.error(f"测试套执行超时: {suite_id}")
             
@@ -880,6 +932,7 @@ class Agent:
         
         except Exception as e:
             error_msg = str(e)
+            await send_log("error", f"测试套执行失败: {error_msg}")
             if self.logger:
                 self.logger.exception(f"测试套执行失败: {suite_id}, 错误: {e}")
             
@@ -900,6 +953,9 @@ class Agent:
             # 清理进程引用
             if suite_id in self.running_suites:
                 del self.running_suites[suite_id]
+            # 清理execution_id
+            if suite_id in self.suite_execution_ids:
+                del self.suite_execution_ids[suite_id]
             # 清理临时目录（可选，保留以便调试）
             # if suite_work_dir.exists():
             #     shutil.rmtree(suite_work_dir)
@@ -956,10 +1012,21 @@ class Agent:
             self.logger.info("Agent已启动，等待任务...")
         
         # 等待任务完成或中断
+        # 注意：receive_messages() 应该永远不会退出（除非明确要求停止）
         try:
             await receive_task
+            # 如果receive_task完成，说明receive_messages()退出了，这不应该发生
+            if self.logger:
+                self.logger.warning("消息接收任务意外退出，Agent将继续运行等待重连...")
+            # 不退出程序，而是继续等待（实际上receive_messages内部会处理重连）
         except asyncio.CancelledError:
+            if self.logger:
+                self.logger.info("消息接收任务被取消")
             pass
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"消息接收任务出错: {e}")
+            # 不退出，继续运行
     
     async def stop(self) -> None:
         """停止Agent"""

@@ -69,7 +69,7 @@ const routes = [
         name: 'TestSuites',
         component: () => import('@views/TestSuites.vue'),
         meta: {
-          title: '测试套管理',
+          title: '测试任务',
           icon: 'AppstoreOutlined'
         }
       },

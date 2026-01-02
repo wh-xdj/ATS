@@ -153,6 +153,7 @@ export interface Environment {
   tags?: string
   remoteWorkDir?: string
   reconnectDelay?: string  // Agent重连延迟时间（秒）
+  maxConcurrentTasks?: number  // 最大并发任务数量，默认为1
   // 节点信息（从agent获取）
   nodeIp?: string
   osType?: string
@@ -174,6 +175,7 @@ export interface Environment {
   }
   // 节点状态
   isOnline: boolean
+  isBusy?: boolean  // 是否有正在运行的任务（忙碌中）
   lastHeartbeat?: string
   // 兼容旧字段
   apiUrl?: string

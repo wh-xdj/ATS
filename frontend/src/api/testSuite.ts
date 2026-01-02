@@ -86,9 +86,13 @@ export const testSuiteApi = {
     return apiClient.post(`/test-plans/suites/${suiteId}/execute`)
   },
 
-  // 取消测试套执行
-  cancelTestSuite: async (suiteId: string): Promise<TestSuite> => {
-    return apiClient.post(`/test-plans/suites/${suiteId}/cancel`)
+  // 取消测试套执行（支持通过executionId取消特定执行）
+  cancelTestSuite: async (suiteId: string, executionId?: string): Promise<TestSuite> => {
+    const body: { executionId?: string } = {}
+    if (executionId) {
+      body.executionId = executionId
+    }
+    return apiClient.post(`/test-plans/suites/${suiteId}/cancel`, body)
   },
 
   // 获取测试套执行记录

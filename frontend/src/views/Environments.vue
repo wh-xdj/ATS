@@ -38,9 +38,15 @@
             </template>
 
             <template v-else-if="column.key === 'isOnline'">
-              <a-tag :color="record.isOnline ? 'green' : 'red'">
-                {{ record.isOnline ? '在线' : '离线' }}
-              </a-tag>
+              <a-space>
+                <a-tag :color="record.isOnline ? (record.isBusy ? 'orange' : 'green') : 'red'">
+                  {{ record.isOnline ? (record.isBusy ? '忙碌中' : '在线') : '离线' }}
+                </a-tag>
+              </a-space>
+            </template>
+
+            <template v-else-if="column.key === 'maxConcurrentTasks'">
+              <span>{{ record.maxConcurrentTasks || 1 }}</span>
             </template>
 
             <template v-else-if="column.key === 'status'">
@@ -519,6 +525,19 @@
           </div>
         </a-form-item>
 
+        <a-form-item name="maxConcurrentTasks" label="最大并发任务数量" :rules="[{ required: true, message: '请输入最大并发任务数量' }]">
+          <a-input-number
+            v-model:value="formData.maxConcurrentTasks"
+            :min="1"
+            :max="100"
+            placeholder="请输入最大并发任务数量，默认为1"
+            style="width: 100%"
+          />
+          <div style="color: #999; font-size: 12px; margin-top: 4px">
+            超过此数量的任务将自动排队等待执行
+          </div>
+        </a-form-item>
+
         <a-form-item name="description" label="描述">
           <a-textarea
             v-model:value="formData.description"
@@ -629,6 +648,7 @@ const formData = reactive<{
   tags: string
   remoteWorkDir: string
   reconnectDelay: number | string
+  maxConcurrentTasks: number
   description: string
   status: boolean
 }>({
@@ -636,6 +656,7 @@ const formData = reactive<{
   tags: '',
   remoteWorkDir: '',
   reconnectDelay: 30,  // 默认30秒
+  maxConcurrentTasks: 1,  // 默认1个任务
   description: '',
   status: true
 })
@@ -672,6 +693,13 @@ const columns = [
     key: 'isOnline',
     dataIndex: 'isOnline',
     width: 90,
+    align: 'center' as const
+  },
+  {
+    title: '最大并发任务',
+    key: 'maxConcurrentTasks',
+    dataIndex: 'maxConcurrentTasks',
+    width: 120,
     align: 'center' as const
   },
   {
@@ -730,6 +758,7 @@ const showCreateModal = () => {
   formData.tags = ''
   formData.remoteWorkDir = ''
   formData.reconnectDelay = 30
+  formData.maxConcurrentTasks = 1
   formData.description = ''
   formData.status = true
   modalVisible.value = true
@@ -742,6 +771,7 @@ const editEnvironment = (environment: Environment) => {
   formData.remoteWorkDir = environment.remoteWorkDir || ''
   // 将字符串转换为数字，如果不存在则使用默认值30
   formData.reconnectDelay = environment.reconnectDelay ? parseInt(environment.reconnectDelay, 10) || 30 : 30
+  formData.maxConcurrentTasks = environment.maxConcurrentTasks || 1
   formData.description = environment.description || ''
   formData.status = environment.status
   modalVisible.value = true
@@ -755,7 +785,8 @@ const handleSubmit = async () => {
     // 准备提交数据，将reconnectDelay转换为字符串
     const submitData = {
       ...formData,
-      reconnectDelay: String(formData.reconnectDelay || 30)
+      reconnectDelay: String(formData.reconnectDelay || 30),
+      maxConcurrentTasks: formData.maxConcurrentTasks || 1
     }
 
     if (editingEnvironment.value) {
@@ -1120,7 +1151,7 @@ const executionColumns = [
     ellipsis: true
   },
   {
-    title: '测试套名称',
+    title: '测试任务名称',
     key: 'suiteName',
     dataIndex: 'suiteName',
     width: 200,

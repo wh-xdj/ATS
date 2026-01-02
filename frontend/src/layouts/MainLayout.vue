@@ -182,7 +182,7 @@ const menuItems = [
   },
   {
     key: 'test-suites',
-    title: '测试套管理',
+    title: '测试任务',
     icon: AppstoreOutlined,
     path: '/test-suites'
   },

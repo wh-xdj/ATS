@@ -1,8 +1,8 @@
 <template>
   <div class="test-suites-container">
     <a-page-header
-      title="测试套管理"
-      sub-title="管理自动化测试套"
+      title="测试任务"
+      sub-title="管理自动化测试任务"
     >
       <template #extra>
         <a-space>
@@ -24,7 +24,7 @@
           </a-select>
           <a-button type="primary" @click="showCreateModal">
             <template #icon><PlusOutlined /></template>
-            新建测试套
+            新建测试任务
           </a-button>
           <a-button @click="refreshSuites">
             <template #icon><ReloadOutlined /></template>
@@ -41,7 +41,7 @@
           <a-col :span="6">
             <a-input-search
               v-model:value="searchValue"
-              placeholder="搜索测试套名称"
+              placeholder="搜索测试任务名称"
               @search="handleSearch"
               @change="handleSearchChange"
             />
@@ -87,7 +87,7 @@
         </a-row>
       </a-card>
 
-      <!-- 测试套列表 -->
+      <!-- 测试任务列表 -->
       <a-card class="suites-card">
         <a-table
           :columns="columns"
@@ -133,18 +133,8 @@
                   type="link"
                   size="small"
                   @click="executeSuite(record)"
-                  :disabled="record.status === 'running'"
                 >
                   执行
-                </a-button>
-                <a-button
-                  type="link"
-                  size="small"
-                  danger
-                  @click="cancelSuite(record)"
-                  :disabled="record.status !== 'running'"
-                >
-                  取消
                 </a-button>
                 <a-dropdown>
                   <a-button type="link" size="small">
@@ -152,7 +142,7 @@
                   </a-button>
                   <template #overlay>
                     <a-menu @click="(info) => handleMoreMenuClick(info.key, record)">
-                      <a-menu-item key="viewExecutions">执行历史</a-menu-item>
+                      <a-menu-item key="viewExecutions">执行详情</a-menu-item>
                       <a-menu-divider />
                       <a-menu-item key="delete" danger>删除</a-menu-item>
                     </a-menu>
@@ -165,7 +155,7 @@
       </a-card>
     </div>
 
-    <!-- 测试套编辑对话框 -->
+    <!-- 测试任务编辑对话框 -->
     <TestSuiteEdit
       v-model:visible="editModalVisible"
       :plan-id="selectedPlanId"
@@ -174,10 +164,10 @@
       @cancel="editModalVisible = false"
     />
 
-    <!-- 执行历史抽屉 -->
+    <!-- 执行详情抽屉 -->
     <a-drawer
       v-model:visible="executionHistoryDrawerVisible"
-      title="执行历史"
+      title="执行详情"
       :width="1000"
       placement="right"
     >
@@ -194,7 +184,7 @@
           <a-col :span="8">
             <a-input-search
               v-model:value="executionSearchValue"
-              placeholder="搜索测试套名称"
+              placeholder="搜索测试任务名称"
               @search="handleExecutionSearch"
               allow-clear
             />
@@ -224,7 +214,7 @@
         </a-row>
       </div>
 
-      <!-- 执行历史列表 -->
+      <!-- 执行详情列表 -->
       <a-table
         :columns="executionColumns"
         :data-source="executionHistory"
@@ -245,12 +235,12 @@
           </template>
 
           <template v-else-if="column.key === 'suiteName'">
-            {{ record.suiteName || '未知测试套' }}
+            {{ record.suiteName || '未知测试任务' }}
           </template>
 
           <template v-else-if="column.key === 'result'">
             <a-tag :color="getExecutionResultColor(record.result)">
-              <template v-if="record.result === 'running'">
+              <template v-if="record.result === 'running' || record.result === 'pending'">
                 <a-spin size="small" style="margin-right: 6px" />
                 {{ getExecutionResultText(record.result) }}
               </template>
@@ -274,11 +264,20 @@
                 日志
               </a-button>
               <a-button 
+                v-if="record.result === 'running' || record.result === 'pending'"
+                type="link" 
+                size="small" 
+                danger 
+                @click="cancelExecution(record)"
+              >
+                取消
+              </a-button>
+              <a-button 
                 type="link" 
                 size="small" 
                 danger 
                 @click="deleteExecution(record)"
-                :disabled="record.isRunning"
+                :disabled="record.result === 'running' || record.result === 'pending'"
               >
                 删除
               </a-button>
@@ -408,7 +407,7 @@ const pagination = reactive({
 // 表格列配置
 const columns = [
   {
-    title: '测试套名称',
+    title: '测试任务名称',
     key: 'name',
     dataIndex: 'name',
     width: 200,
@@ -463,7 +462,7 @@ const columns = [
   }
 ]
 
-// 执行历史相关
+// 执行详情相关
 const executionHistoryDrawerVisible = ref(false)
 const executionHistoryLoading = ref(false)
 const executionLogLoading = ref(false)
@@ -499,14 +498,14 @@ const executionColumns = [
     align: 'center' as const
   },
   {
-    title: '日志ID',
+    title: 'ID',
     key: 'logId',
     dataIndex: 'logId',
     width: 280,
     ellipsis: true
   },
   {
-    title: '测试套名称',
+    title: '测试任务名称',
     key: 'suiteName',
     dataIndex: 'suiteName',
     width: 180,
@@ -618,7 +617,7 @@ const filterPlanOption = (input: string, option: any) => {
 const loadSuites = async () => {
   loading.value = true
   try {
-    // 获取所有计划的测试套
+    // 获取所有计划的测试任务
     const allSuites: (TestSuite & { planName?: string })[] = []
     
     // 确定要加载的计划列表
@@ -651,9 +650,9 @@ const loadSuites = async () => {
         }))
         allSuites.push(...planSuites)
       } catch (error: any) {
-        // 如果是404错误（计划没有测试套），静默处理
+        // 如果是404错误（计划没有测试任务），静默处理
         if (error?.response?.status === 404) {
-          // 计划没有测试套，这是正常的，不需要报错
+          // 计划没有测试任务，这是正常的，不需要报错
           continue
         }
         // 其他错误才记录
@@ -680,7 +679,7 @@ const loadSuites = async () => {
     pagination.total = filteredSuites.length
   } catch (error) {
     console.error('Failed to load suites:', error)
-    message.error('加载测试套列表失败')
+    message.error('加载测试任务列表失败')
   } finally {
     loading.value = false
   }
@@ -738,7 +737,7 @@ const executeSuite = async (suite: TestSuite) => {
   try {
     const environment = await environmentApi.getEnvironment(suite.environmentId)
     if (!environment.isOnline) {
-      message.warning(`执行环境"${environment.name}"未在线，无法执行测试套`)
+      message.warning(`执行环境"${environment.name}"未在线，无法执行测试任务`)
       return
     }
   } catch (error: any) {
@@ -749,11 +748,11 @@ const executeSuite = async (suite: TestSuite) => {
 
   Modal.confirm({
     title: '确认执行',
-    content: `确定要执行测试套"${suite.name}"吗？`,
+    content: `确定要执行测试任务"${suite.name}"吗？`,
     onOk: async () => {
       try {
         await testSuiteApi.executeTestSuite(suite.id)
-        message.success('测试套执行已启动')
+        message.success('测试任务执行已启动')
         await loadSuites()
         
         // 如果日志对话框已打开且是当前测试套，清空日志准备接收新日志
@@ -768,7 +767,7 @@ const executeSuite = async (suite: TestSuite) => {
         console.error('Failed to execute suite:', error)
         const errorMessage = error.response?.data?.detail || '执行失败'
         if (error.response?.status === 503) {
-          message.error('执行环境未在线，无法执行测试套')
+          message.error('执行环境未在线，无法执行测试任务')
         } else {
           message.error(errorMessage)
         }
@@ -972,8 +971,8 @@ const formatLogTime = (timestamp: string | undefined): string => {
 const handleMoreMenuClick = (key: string, record: TestSuite) => {
   switch (key) {
     case 'viewExecutions':
-      // 如果当前在测试套页面，直接打开执行历史抽屉
-      // 否则跳转到测试套页面并打开执行历史
+      // 如果当前在测试套页面，直接打开执行详情抽屉
+      // 否则跳转到测试套页面并打开执行详情
       if (route.path === '/test-suites') {
         viewExecutionHistory(record)
       } else {
@@ -1052,7 +1051,7 @@ const getStatusLabel = (status: string) => {
   return labelMap[status] || status
 }
 
-// 执行历史相关方法
+// 执行详情相关方法
 const viewExecutionHistory = (suite: TestSuite) => {
   currentSuiteId.value = suite.id
   executionHistoryDrawerVisible.value = true
@@ -1088,7 +1087,7 @@ const loadExecutionHistory = async () => {
     executionPagination.total = response.total || 0
   } catch (error) {
     console.error('Failed to load execution history:', error)
-    message.error('加载执行历史失败')
+    message.error('加载执行详情失败')
   } finally {
     executionHistoryLoading.value = false
   }
@@ -1127,6 +1126,29 @@ const viewExecutionLogs = async (record: any) => {
   router.push({
     path: '/test-suites/execution-log',
     query
+  })
+}
+
+const cancelExecution = async (record: any) => {
+  Modal.confirm({
+    title: '确认取消',
+    content: `确定要取消序号为 ${record.sequenceNumber || record.executionId} 的执行吗？`,
+    okType: 'danger',
+    okText: '取消',
+    cancelText: '关闭',
+    onOk: async () => {
+      try {
+        // 传递executionId以取消特定的执行记录
+        await testSuiteApi.cancelTestSuite(record.suiteId, record.executionId)
+        message.success('取消指令已发送')
+        await loadExecutionHistory()
+        await loadSuites()  // 刷新测试套列表
+      } catch (error: any) {
+        console.error('Failed to cancel execution:', error)
+        const errorMessage = error.response?.data?.detail || '取消失败'
+        message.error(errorMessage)
+      }
+    }
   })
 }
 
@@ -1169,6 +1191,7 @@ const getExecutionResultColor = (result: string): string => {
     cancelled: 'orange',
     skipped: 'default',
     running: 'blue',
+    pending: 'orange',
     unknown: 'default'
   }
   return colorMap[result] || 'default'
@@ -1182,6 +1205,7 @@ const getExecutionResultText = (result: string): string => {
     cancelled: '取消',
     skipped: '跳过',
     running: '执行中',
+    pending: '等待中',
     unknown: '未知'
   }
   return textMap[result] || result
@@ -1210,7 +1234,7 @@ const formatDateTime = (dateTime: string | undefined): string => {
 }
 
 // 生命周期
-// 监听路由参数，自动打开执行历史抽屉
+// 监听路由参数，自动打开执行详情抽屉
 watch(() => route.query, async (newQuery) => {
   if (newQuery.suiteId && newQuery.showHistory === 'true') {
     // 等待测试套列表加载完成
@@ -1244,7 +1268,7 @@ onMounted(async () => {
   await loadAllPlans()
   await loadSuites()
   
-  // 检查路由参数，如果有suiteId和showHistory，打开执行历史抽屉
+  // 检查路由参数，如果有suiteId和showHistory，打开执行详情抽屉
   if (route.query.suiteId && route.query.showHistory === 'true') {
     const suite = suites.value.find(s => s.id === route.query.suiteId)
     if (suite) {

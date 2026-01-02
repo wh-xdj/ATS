@@ -56,6 +56,24 @@ export const environmentApi = {
     })
     return response || []
   },
+  // 获取队列状态
+  getQueueStatus: async (id: string): Promise<{
+    maxConcurrentTasks: number
+    runningCount: number
+    pendingCount: number
+    canExecute: boolean
+  }> => {
+    return apiClient.get(`/environments/${id}/queue-status`)
+  },
+
+  // 获取队列任务列表
+  getQueueTasks: async (
+    id: string,
+    params?: { status?: string; skip?: number; limit?: number }
+  ): Promise<any> => {
+    return apiClient.get(`/environments/${id}/queue-tasks`, { params })
+  },
+
   readWorkspaceFile: async (id: string, path: string, encoding: string = 'utf-8'): Promise<{ content: string; encoding: string; size: number }> => {
     const response = await apiClient.get(`/environments/${id}/workspace/read`, {
       params: { path, encoding }

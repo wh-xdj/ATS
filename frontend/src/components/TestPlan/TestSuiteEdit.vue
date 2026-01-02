@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:visible="innerVisible"
-    :title="suiteId ? '编辑测试套' : '创建测试套'"
+    :title="suiteId ? '编辑测试任务' : '创建测试任务'"
     width="900px"
     :confirm-loading="saving"
     @ok="handleSave"
@@ -33,19 +33,19 @@
         </a-select>
       </a-form-item>
 
-      <a-form-item label="测试套名称" name="name">
+      <a-form-item label="测试任务名称" name="name">
         <a-input
           v-model:value="formData.name"
-          placeholder="请输入测试套名称"
+          placeholder="请输入测试任务名称"
           :maxlength="100"
           show-count
         />
       </a-form-item>
 
-      <a-form-item label="测试套描述" name="description">
+      <a-form-item label="测试任务描述" name="description">
         <a-textarea
           v-model:value="formData.description"
-          placeholder="请输入测试套描述"
+          placeholder="请输入测试任务描述"
           :rows="3"
           :maxlength="500"
           show-count
@@ -309,7 +309,7 @@ const formRules: Record<string, Rule[]> = {
     { required: true, message: '请选择测试计划', trigger: 'change' }
   ],
   name: [
-    { required: true, message: '请输入测试套名称', trigger: 'blur' }
+    { required: true, message: '请输入测试任务名称', trigger: 'blur' }
   ],
   gitRepoUrl: [
     { 
@@ -469,7 +469,7 @@ const loadSuite = async () => {
     await loadCasesInfo()
   } catch (error) {
     console.error('Failed to load suite:', error)
-    message.error('加载测试套失败')
+    message.error('加载测试任务失败')
   }
 }
 
@@ -573,10 +573,10 @@ const handleSave = async () => {
       updateData.git_token = formData.gitToken || null
       
       suite = await testSuiteApi.updateTestSuite(props.suiteId, updateData)
-      message.success('测试套更新成功')
+      message.success('测试任务更新成功')
     } else {
       suite = await testSuiteApi.createTestSuite(planId, suiteData)
-      message.success('测试套创建成功')
+      message.success('测试任务创建成功')
     }
     
     emit('save', suite)
@@ -586,7 +586,7 @@ const handleSave = async () => {
     if (error.response?.data?.detail) {
       message.error(error.response.data.detail)
     } else {
-      message.error(props.suiteId ? '更新测试套失败' : '创建测试套失败')
+      message.error(props.suiteId ? '更新测试任务失败' : '创建测试任务失败')
     }
   } finally {
     saving.value = false

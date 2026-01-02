@@ -1241,20 +1241,28 @@ const handleExecutionTableChange = (pag: any) => {
 
 const getExecutionResultColor = (result: string): string => {
   const colorMap: Record<string, string> = {
-    passed: 'green',
-    failed: 'red',
-    blocked: 'orange',
-    skipped: 'default'
+    passed: 'green',      // 成功 - 绿色
+    success: 'green',     // 成功 - 绿色（别名）
+    failed: 'red',        // 失败 - 红色
+    error: 'red',         // 错误 - 红色
+    cancelled: 'orange',  // 取消 - 橙色
+    blocked: 'orange',    // 阻塞 - 橙色
+    skipped: 'default',   // 跳过 - 默认灰色
+    unknown: 'default'     // 未知 - 默认灰色
   }
   return colorMap[result] || 'default'
 }
 
 const getExecutionResultText = (result: string): string => {
   const textMap: Record<string, string> = {
-    passed: '通过',
+    passed: '成功',
+    success: '成功',
     failed: '失败',
+    error: '失败',
+    cancelled: '取消',
     blocked: '阻塞',
-    skipped: '跳过'
+    skipped: '跳过',
+    unknown: '未知'
   }
   return textMap[result] || result
 }
@@ -1300,10 +1308,13 @@ const viewExecutionLogs = async (record: any) => {
         limit: 1
       })
       const logs = response.items || []
-      if (logs.length > 0) {
+      console.log(logs)
+      // 验证返回的日志ID是否匹配（防止查询错误）
+      if (logs.length > 0 && logs[0].id === record.logId) {
         // 直接取该日志记录的message
         executionLog.value = logs[0].message || '暂无日志'
       } else {
+        console.warn(`日志ID不匹配: 期望 ${record.logId}, 实际 ${logs[0]?.id || '无'}`)
         executionLog.value = '暂无日志'
       }
     } else if (record.executionId) {

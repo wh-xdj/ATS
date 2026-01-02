@@ -74,6 +74,15 @@ const routes = [
         }
       },
       {
+        path: 'test-suites/execution-log',
+        name: 'SuiteExecutionLog',
+        component: () => import('@views/SuiteExecutionLog.vue'),
+        meta: {
+          title: '执行日志',
+          icon: 'FileTextOutlined'
+        }
+      },
+      {
         path: 'environments',
         name: 'Environments',
         component: () => import('@views/Environments.vue'),

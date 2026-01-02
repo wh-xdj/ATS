@@ -146,13 +146,6 @@
                 >
                   取消
                 </a-button>
-                <a-button
-                  type="link"
-                  size="small"
-                  @click="viewSuiteLogs(record)"
-                >
-                  日志
-                </a-button>
                 <a-dropdown>
                   <a-button type="link" size="small">
                     更多
@@ -195,24 +188,75 @@
         </a-button>
       </template>
 
+      <!-- 筛选区域 -->
+      <div class="filter-section" style="margin-bottom: 16px">
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-input-search
+              v-model:value="executionSearchValue"
+              placeholder="搜索测试套名称"
+              @search="handleExecutionSearch"
+              allow-clear
+            />
+          </a-col>
+          <a-col :span="6">
+            <a-select
+              v-model:value="executionResultFilter"
+              placeholder="执行结果"
+              style="width: 100%"
+              allow-clear
+              @change="handleExecutionFilterChange"
+            >
+              <a-select-option value="passed">通过</a-select-option>
+              <a-select-option value="failed">失败</a-select-option>
+              <a-select-option value="cancelled">取消</a-select-option>
+              <a-select-option value="skipped">跳过</a-select-option>
+              <a-select-option value="running">执行中</a-select-option>
+            </a-select>
+          </a-col>
+          <a-col :span="10">
+            <a-range-picker
+              v-model:value="executionDateRange"
+              style="width: 100%"
+              @change="handleExecutionFilterChange"
+            />
+          </a-col>
+        </a-row>
+      </div>
+
+      <!-- 执行历史列表 -->
       <a-table
         :columns="executionColumns"
         :data-source="executionHistory"
         :loading="executionHistoryLoading"
         :pagination="executionPagination"
         :row-key="record => record.id"
-        :scroll="{ x: 800 }"
+        :scroll="{ x: 1040 }"
         @change="handleExecutionTableChange"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'caseName'">
-            {{ record.caseName || '未知用例' }}
+          <template v-if="column.key === 'sequenceNumber'">
+            {{ record.sequenceNumber || '-' }}
+          </template>
+
+          <template v-else-if="column.key === 'logId'">
+            <span style="font-family: monospace; font-size: 12px;">{{ record.logId || '-' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'suiteName'">
+            {{ record.suiteName || '未知测试套' }}
           </template>
 
           <template v-else-if="column.key === 'result'">
             <a-tag :color="getExecutionResultColor(record.result)">
-              {{ getExecutionResultText(record.result) }}
+              <template v-if="record.result === 'running'">
+                <a-spin size="small" style="margin-right: 6px" />
+                {{ getExecutionResultText(record.result) }}
+              </template>
+              <template v-else>
+                {{ getExecutionResultText(record.result) }}
+              </template>
             </a-tag>
           </template>
 
@@ -226,8 +270,17 @@
 
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button type="link" size="small" @click="viewExecutionLogs(record.id)">
+              <a-button type="link" size="small" @click="viewExecutionLogs(record)">
                 日志
+              </a-button>
+              <a-button 
+                type="link" 
+                size="small" 
+                danger 
+                @click="deleteExecution(record)"
+                :disabled="record.isRunning"
+              >
+                删除
               </a-button>
             </a-space>
           </template>
@@ -287,7 +340,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -415,7 +468,7 @@ const executionHistoryDrawerVisible = ref(false)
 const executionHistoryLoading = ref(false)
 const executionLogLoading = ref(false)
 const currentSuiteId = ref<string>('')
-const executionHistory = ref<TestSuiteExecution[]>([])
+const executionHistory = ref<any[]>([])
 const executionLog = ref('')
 const executionLogModalVisible = ref(false)
 const currentLogSuite = ref<TestSuite | null>(null)
@@ -423,6 +476,9 @@ const suiteLogs = ref<Array<{ message: string; timestamp: string; execution_id?:
 const logContentRef = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
 const currentLogHandler = ref<((message: LogMessage) => void) | null>(null)
+const executionSearchValue = ref<string>('')
+const executionResultFilter = ref<string>()
+const executionDateRange = ref<any[]>([])
 
 const executionPagination = reactive({
   current: 1,
@@ -436,42 +492,56 @@ const executionPagination = reactive({
 
 const executionColumns = [
   {
-    title: '用例名称',
-    key: 'caseName',
-    dataIndex: 'caseName',
-    width: 200,
+    title: '序号',
+    key: 'sequenceNumber',
+    dataIndex: 'sequenceNumber',
+    width: 80,
+    align: 'center' as const
+  },
+  {
+    title: '日志ID',
+    key: 'logId',
+    dataIndex: 'logId',
+    width: 280,
+    ellipsis: true
+  },
+  {
+    title: '测试套名称',
+    key: 'suiteName',
+    dataIndex: 'suiteName',
+    width: 180,
     ellipsis: true
   },
   {
     title: '执行结果',
     key: 'result',
     dataIndex: 'result',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
-    title: '执行环境',
-    key: 'environmentName',
-    dataIndex: 'environmentName',
-    width: 150
+    title: '执行人',
+    key: 'executorName',
+    dataIndex: 'executorName',
+    width: 100
   },
   {
     title: '执行时间',
     key: 'executedAt',
     dataIndex: 'executedAt',
-    width: 180
+    width: 160
   },
   {
     title: '执行耗时',
     key: 'duration',
     dataIndex: 'duration',
-    width: 100,
+    width: 90,
     align: 'center' as const
   },
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 120,
     align: 'center' as const,
     fixed: 'right' as const
   }
@@ -899,10 +969,22 @@ const formatLogTime = (timestamp: string | undefined): string => {
   }
 }
 
-const handleMoreMenuClick = ({ key }: { key: string }, record: TestSuite) => {
+const handleMoreMenuClick = (key: string, record: TestSuite) => {
   switch (key) {
     case 'viewExecutions':
-      viewExecutionHistory(record)
+      // 如果当前在测试套页面，直接打开执行历史抽屉
+      // 否则跳转到测试套页面并打开执行历史
+      if (route.path === '/test-suites') {
+        viewExecutionHistory(record)
+      } else {
+        router.push({
+          path: '/test-suites',
+          query: {
+            suiteId: record.id,
+            showHistory: 'true'
+          }
+        })
+      }
       break
     case 'delete':
       deleteSuite(record)
@@ -915,14 +997,17 @@ const deleteSuite = (suite: TestSuite) => {
     title: '确认删除',
     content: `确定要删除测试套"${suite.name}"吗？此操作不可恢复。`,
     okType: 'danger',
+    okText: '删除',
+    cancelText: '取消',
     onOk: async () => {
       try {
         await testSuiteApi.deleteTestSuite(suite.id)
         message.success('测试套已删除')
         await loadSuites()
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to delete suite:', error)
-        message.error('删除失败')
+        const errorMessage = error.response?.data?.detail || '删除失败'
+        message.error(errorMessage)
       }
     }
   })
@@ -980,10 +1065,25 @@ const loadExecutionHistory = async () => {
 
   executionHistoryLoading.value = true
   try {
-    const response = await testSuiteApi.getSuiteExecutions(currentSuiteId.value, {
+    const params: any = {
       skip: (executionPagination.current - 1) * executionPagination.pageSize,
       limit: executionPagination.pageSize
-    })
+    }
+    
+    if (executionSearchValue.value) {
+      params.search = executionSearchValue.value
+    }
+    
+    if (executionResultFilter.value) {
+      params.result = executionResultFilter.value
+    }
+    
+    if (executionDateRange.value && executionDateRange.value.length === 2) {
+      params.startDate = dayjs(executionDateRange.value[0]).format('YYYY-MM-DD')
+      params.endDate = dayjs(executionDateRange.value[1]).format('YYYY-MM-DD')
+    }
+    
+    const response = await testSuiteApi.getSuiteSuiteExecutions(currentSuiteId.value, params)
     executionHistory.value = response.items || []
     executionPagination.total = response.total || 0
   } catch (error) {
@@ -1006,20 +1106,59 @@ const handleExecutionTableChange = (pag: any) => {
   loadExecutionHistory()
 }
 
-const viewExecutionLogs = async (executionId: string) => {
-  executionLogLoading.value = true
-  executionLogModalVisible.value = true
-  try {
-    // 这里需要根据实际的API调整
-    const execution = executionHistory.value.find(e => e.id === executionId)
-    executionLog.value = execution?.logOutput || '暂无日志'
-  } catch (error) {
-    console.error('Failed to load execution logs:', error)
-    message.error('加载执行日志失败')
-    executionLog.value = '加载日志失败'
-  } finally {
-    executionLogLoading.value = false
+const viewExecutionLogs = async (record: any) => {
+  // 跳转到执行日志页面
+  const query: any = {
+    suiteId: record.suiteId
   }
+  
+  // 优先使用logId，如果没有则使用executionId
+  if (record.logId) {
+    query.logId = record.logId
+  } else if (record.executionId) {
+    query.executionId = record.executionId
+  }
+  
+  // 如果是执行中状态，传递isRunning参数
+  if (record.result === 'running') {
+    query.isRunning = 'true'
+  }
+  
+  router.push({
+    path: '/test-suites/execution-log',
+    query
+  })
+}
+
+const deleteExecution = async (record: any) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除序号为 ${record.sequenceNumber || record.executionId} 的执行记录吗？此操作不可恢复。`,
+    okType: 'danger',
+    okText: '删除',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await testSuiteApi.deleteSuiteExecution(record.suiteId, record.executionId)
+        message.success('执行记录已删除')
+        await loadExecutionHistory()
+      } catch (error: any) {
+        console.error('Failed to delete execution:', error)
+        const errorMessage = error.response?.data?.detail || '删除失败'
+        message.error(errorMessage)
+      }
+    }
+  })
+}
+
+const handleExecutionSearch = () => {
+  executionPagination.current = 1
+  loadExecutionHistory()
+}
+
+const handleExecutionFilterChange = () => {
+  executionPagination.current = 1
+  loadExecutionHistory()
 }
 
 const getExecutionResultColor = (result: string): string => {
@@ -1027,7 +1166,10 @@ const getExecutionResultColor = (result: string): string => {
     passed: 'green',
     failed: 'red',
     error: 'red',
-    skipped: 'default'
+    cancelled: 'orange',
+    skipped: 'default',
+    running: 'blue',
+    unknown: 'default'
   }
   return colorMap[result] || 'default'
 }
@@ -1037,15 +1179,22 @@ const getExecutionResultText = (result: string): string => {
     passed: '通过',
     failed: '失败',
     error: '错误',
-    skipped: '跳过'
+    cancelled: '取消',
+    skipped: '跳过',
+    running: '执行中',
+    unknown: '未知'
   }
   return textMap[result] || result
 }
 
 const formatExecutionDuration = (duration: string | undefined): string => {
   if (!duration) return '-'
-  // duration可能是秒数（字符串或数字）
+  // duration格式可能是 "H:MM:SS.ss" 或秒数字符串
+  if (duration.includes(':')) {
+    return duration
+  }
   const seconds = typeof duration === 'string' ? parseFloat(duration) : duration
+  if (isNaN(seconds)) return duration
   if (seconds < 60) {
     return `${seconds.toFixed(1)}秒`
   } else if (seconds < 3600) {
@@ -1061,6 +1210,27 @@ const formatDateTime = (dateTime: string | undefined): string => {
 }
 
 // 生命周期
+// 监听路由参数，自动打开执行历史抽屉
+watch(() => route.query, async (newQuery) => {
+  if (newQuery.suiteId && newQuery.showHistory === 'true') {
+    // 等待测试套列表加载完成
+    if (suites.value.length === 0) {
+      await loadSuites()
+    }
+    
+    // 查找对应的测试套
+    const suite = suites.value.find(s => s.id === newQuery.suiteId)
+    if (suite) {
+      viewExecutionHistory(suite)
+      // 清除query参数，避免刷新时重复打开
+      router.replace({
+        path: route.path,
+        query: { ...route.query, suiteId: undefined, showHistory: undefined }
+      })
+    }
+  }
+}, { immediate: true })
+
 onMounted(async () => {
   // 确保项目列表已加载
   if (projects.value.length === 0) {
@@ -1073,6 +1243,19 @@ onMounted(async () => {
   await loadPlans()
   await loadAllPlans()
   await loadSuites()
+  
+  // 检查路由参数，如果有suiteId和showHistory，打开执行历史抽屉
+  if (route.query.suiteId && route.query.showHistory === 'true') {
+    const suite = suites.value.find(s => s.id === route.query.suiteId)
+    if (suite) {
+      viewExecutionHistory(suite)
+      // 清除query参数
+      router.replace({
+        path: route.path,
+        query: { ...route.query, suiteId: undefined, showHistory: undefined }
+      })
+    }
+  }
 })
 
 // 组件卸载时清理

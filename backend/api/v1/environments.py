@@ -9,6 +9,7 @@ from schemas.common import APIResponse, ResponseStatus
 from api.deps import get_current_user
 from models import User
 from services.environment_service import EnvironmentService
+from services.task_queue_service import TaskQueueService
 from utils.serializer import serialize_model, serialize_list, deserialize_dict
 from core.logger import logger
 from typing import Optional
@@ -561,5 +562,58 @@ async def get_environment_suite_executions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行历史失败: {str(e)}"
+        )
+
+
+@router.get("/{environment_id}/queue-status", response_model=APIResponse)
+async def get_queue_status(
+    environment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取环境任务队列状态"""
+    try:
+        queue_status = TaskQueueService.get_queue_status(db, environment_id)
+        return APIResponse(
+            status=ResponseStatus.SUCCESS,
+            message="获取成功",
+            data=queue_status
+        )
+    except Exception as e:
+        logger.exception(f"获取队列状态失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取队列状态失败: {str(e)}"
+        )
+
+
+@router.get("/{environment_id}/queue-tasks", response_model=APIResponse)
+async def get_queue_tasks(
+    environment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100
+):
+    """获取环境任务队列中的任务列表"""
+    try:
+        tasks = TaskQueueService.get_queue_tasks(
+            db=db,
+            environment_id=environment_id,
+            status=status,
+            skip=skip,
+            limit=limit
+        )
+        return APIResponse(
+            status=ResponseStatus.SUCCESS,
+            message="获取成功",
+            data=tasks
+        )
+    except Exception as e:
+        logger.exception(f"获取队列任务失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取队列任务失败: {str(e)}"
         )
 

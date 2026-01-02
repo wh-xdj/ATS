@@ -16,16 +16,29 @@ class EnvironmentService:
     @staticmethod
     def get_environments(db: Session, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """获取环境列表"""
+        from services.task_queue_service import TaskQueueService
         environments = db.query(Environment).offset(skip).limit(limit).all()
-        return serialize_list(environments, camel_case=True)
+        result = []
+        for env in environments:
+            env_dict = serialize_model(env, camel_case=True)
+            # 检查是否有正在运行的任务
+            running_count = TaskQueueService.get_running_task_count(db, env.id)
+            env_dict["isBusy"] = running_count > 0
+            result.append(env_dict)
+        return result
     
     @staticmethod
     def get_environment(db: Session, environment_id: str) -> Optional[Dict[str, Any]]:
         """获取环境详情"""
+        from services.task_queue_service import TaskQueueService
         environment = db.query(Environment).filter(Environment.id == environment_id).first()
         if not environment:
             return None
-        return serialize_model(environment, camel_case=True)
+        env_dict = serialize_model(environment, camel_case=True)
+        # 检查是否有正在运行的任务
+        running_count = TaskQueueService.get_running_task_count(db, environment_id)
+        env_dict["isBusy"] = running_count > 0
+        return env_dict
     
     @staticmethod
     def generate_token() -> str:
@@ -51,6 +64,7 @@ class EnvironmentService:
             tags=environment_data.tags,
             remote_work_dir=environment_data.remote_work_dir,
             token=token,  # 生成Token
+            max_concurrent_tasks=environment_data.max_concurrent_tasks or 1,  # 默认1
             api_url=environment_data.api_url,
             web_url=environment_data.web_url,
             database_config=environment_data.database_config,

@@ -14,6 +14,8 @@ class EnvironmentBase(BaseModel):
     remoteWorkDir: Optional[str] = None
     reconnect_delay: Optional[str] = "30"  # Agent重连延迟时间（秒）
     reconnectDelay: Optional[str] = None  # 兼容前端camelCase
+    max_concurrent_tasks: Optional[int] = 1  # 最大并发任务数量，默认为1
+    maxConcurrentTasks: Optional[int] = None  # 兼容前端camelCase
     # 兼容旧字段
     api_url: Optional[str] = None
     web_url: Optional[str] = None
@@ -24,7 +26,7 @@ class EnvironmentBase(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def handle_field_aliases(cls, data: Any) -> Any:
-        """处理字段名兼容：将remoteWorkDir转换为remote_work_dir"""
+        """处理字段名兼容：将remoteWorkDir转换为remote_work_dir，maxConcurrentTasks转换为max_concurrent_tasks"""
         if isinstance(data, dict):
             # 如果收到remoteWorkDir但没有remote_work_dir，则转换
             if 'remoteWorkDir' in data and 'remote_work_dir' not in data:
@@ -35,6 +37,14 @@ class EnvironmentBase(BaseModel):
                     data['remote_work_dir'] = data.pop('remoteWorkDir')
                 else:
                     data.pop('remoteWorkDir', None)
+            # 处理maxConcurrentTasks
+            if 'maxConcurrentTasks' in data and 'max_concurrent_tasks' not in data:
+                data['max_concurrent_tasks'] = data.pop('maxConcurrentTasks')
+            elif 'maxConcurrentTasks' in data and 'max_concurrent_tasks' in data:
+                if not data.get('max_concurrent_tasks'):
+                    data['max_concurrent_tasks'] = data.pop('maxConcurrentTasks')
+                else:
+                    data.pop('maxConcurrentTasks', None)
         return data
 
 
@@ -52,6 +62,8 @@ class EnvironmentUpdate(BaseModel):
     remoteWorkDir: Optional[str] = None
     reconnect_delay: Optional[str] = None  # Agent重连延迟时间（秒）
     reconnectDelay: Optional[str] = None  # 兼容前端camelCase
+    max_concurrent_tasks: Optional[int] = None  # 最大并发任务数量
+    maxConcurrentTasks: Optional[int] = None  # 兼容前端camelCase
     # 兼容旧字段
     api_url: Optional[str] = None
     web_url: Optional[str] = None
@@ -63,7 +75,7 @@ class EnvironmentUpdate(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def handle_field_aliases(cls, data: Any) -> Any:
-        """处理字段名兼容：将remoteWorkDir转换为remote_work_dir"""
+        """处理字段名兼容：将remoteWorkDir转换为remote_work_dir，maxConcurrentTasks转换为max_concurrent_tasks"""
         if isinstance(data, dict):
             # 如果收到remoteWorkDir但没有remote_work_dir，则转换
             if 'remoteWorkDir' in data and 'remote_work_dir' not in data:
@@ -74,6 +86,14 @@ class EnvironmentUpdate(BaseModel):
                     data['remote_work_dir'] = data.pop('remoteWorkDir')
                 else:
                     data.pop('remoteWorkDir', None)
+            # 处理maxConcurrentTasks
+            if 'maxConcurrentTasks' in data and 'max_concurrent_tasks' not in data:
+                data['max_concurrent_tasks'] = data.pop('maxConcurrentTasks')
+            elif 'maxConcurrentTasks' in data and 'max_concurrent_tasks' in data:
+                if not data.get('max_concurrent_tasks'):
+                    data['max_concurrent_tasks'] = data.pop('maxConcurrentTasks')
+                else:
+                    data.pop('maxConcurrentTasks', None)
         return data
 
 

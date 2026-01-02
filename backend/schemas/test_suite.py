@@ -70,3 +70,11 @@ class TestSuiteExecutionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class TestSuiteCancelRequest(BaseModel):
+    """取消测试套执行请求"""
+    executionId: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
+

@@ -1,5 +1,5 @@
 """测试环境模型"""
-from sqlalchemy import Column, String, Text, Boolean, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, JSON, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .base import BaseModel
@@ -34,6 +34,9 @@ class Environment(Base, BaseModel):
     # 节点状态
     is_online = Column(Boolean, default=False, nullable=False, index=True, comment="是否在线")
     last_heartbeat = Column(DateTime, comment="最后心跳时间")
+    
+    # 任务管理
+    max_concurrent_tasks = Column(Integer, default=1, nullable=False, comment="最大并发任务数量，默认为1")
     
     # 兼容旧字段（保留）
     api_url = Column(String(500))

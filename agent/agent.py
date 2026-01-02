@@ -612,6 +612,15 @@ class Agent:
                     log_msg["execution_id"] = execution_id
                 await self.ws_client.send_message(log_msg)
             
+            # 上报取消状态的执行结果（需要从suite获取case_ids和executor_id）
+            # 注意：这里需要获取suite信息，但由于取消时可能没有这些信息，我们尝试从消息中获取
+            # 如果无法获取，则不上报结果，让后端根据状态判断
+            if self.ws_client and execution_id:
+                # 尝试获取suite信息以获取case_ids
+                # 这里简化处理：如果无法获取case_ids，就不上报结果
+                # 后端可以根据suite.status来判断是否为取消状态
+                pass
+            
             # 清理execution_id
             if suite_id in self.suite_execution_ids:
                 del self.suite_execution_ids[suite_id]

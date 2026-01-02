@@ -3,6 +3,7 @@ from typing import Optional, Any, List
 from pydantic import BaseModel
 from enum import Enum
 from datetime import datetime
+from utils.datetime_utils import beijing_now_iso
 
 
 class ResponseStatus(str, Enum):
@@ -18,7 +19,7 @@ class APIResponse(BaseModel):
     message: str
     data: Optional[Any] = None
     code: int = 200
-    timestamp: str = datetime.utcnow().isoformat()
+    timestamp: str = beijing_now_iso()
     request_id: Optional[str] = None
 
 

@@ -7,6 +7,7 @@ from models.module import Module
 from schemas.test_case import TestCaseCreate, TestCaseUpdate
 import uuid
 from datetime import datetime
+from utils.datetime_utils import beijing_now
 
 
 class TestCaseService:
@@ -97,7 +98,7 @@ class TestCaseService:
         # 生成case_code（如果未提供）- 纯数字格式
         case_code = case_data.case_code
         if not case_code:
-            timestamp = int(datetime.now().timestamp() * 1000) % 1000000
+            timestamp = int(beijing_now().timestamp() * 1000) % 1000000
             case_code = f"{timestamp:06d}"
 
             # 确保case_code唯一
@@ -153,7 +154,7 @@ class TestCaseService:
             setattr(test_case, field, value)
 
         test_case.updated_by = current_user_id
-        test_case.updated_at = datetime.utcnow()
+        test_case.updated_at = beijing_now()
 
         db.commit()
         db.refresh(test_case)

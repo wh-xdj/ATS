@@ -10,6 +10,7 @@ from models.environment import Environment
 from models.user import User
 from core.logger import logger
 from datetime import datetime
+from utils.datetime_utils import beijing_now
 import uuid
 
 
@@ -149,7 +150,7 @@ class TestSuiteService:
                 # 其他字段如果是None，则跳过（不更新该字段）
         
         suite.updated_by = current_user_id
-        suite.updated_at = datetime.utcnow()
+        suite.updated_at = beijing_now()
         
         db.commit()
         db.refresh(suite)
@@ -189,7 +190,7 @@ class TestSuiteService:
         # 更新状态为运行中
         suite.status = "running"
         suite.updated_by = current_user_id
-        suite.updated_at = datetime.utcnow()
+        suite.updated_at = beijing_now()
         db.commit()
         
         logger.info(f"测试套执行启动: {suite.id} ({suite.name})")

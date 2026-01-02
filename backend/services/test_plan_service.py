@@ -8,6 +8,7 @@ from models.test_case import TestCase
 from models.user import User
 from core.logger import logger
 from datetime import datetime, date
+from utils.datetime_utils import beijing_now
 import uuid
 
 
@@ -120,7 +121,7 @@ class TestPlanService:
     ) -> TestPlan:
         """创建测试计划"""
         # 生成计划编号
-        timestamp = int(datetime.now().timestamp() * 1000) % 1000000
+        timestamp = int(beijing_now().timestamp() * 1000) % 1000000
         plan_number = f"TP-{timestamp:06d}"
 
         # 确保 plan_number 唯一
@@ -251,7 +252,7 @@ class TestPlanService:
         if "environmentConfig" in plan_data:
             test_plan.environment_config = plan_data["environmentConfig"]
 
-        test_plan.updated_at = datetime.utcnow()
+        test_plan.updated_at = beijing_now()
 
         # 更新关联的测试用例
         if "testCaseIds" in plan_data:
@@ -410,7 +411,7 @@ class TestPlanService:
             return False
 
         relation.execution_status = status
-        relation.execution_updated_at = datetime.utcnow()
+        relation.execution_updated_at = beijing_now()
 
         db.commit()
         
@@ -441,7 +442,7 @@ class TestPlanService:
 
             if relation:
                 relation.execution_status = status
-                relation.execution_updated_at = datetime.utcnow()
+                relation.execution_updated_at = beijing_now()
 
         db.commit()
         
@@ -459,7 +460,7 @@ class TestPlanService:
             return None
 
         test_plan.status = status
-        test_plan.updated_at = datetime.utcnow()
+        test_plan.updated_at = beijing_now()
 
         db.commit()
         db.refresh(test_plan)
@@ -486,7 +487,7 @@ class TestPlanService:
             test_plan = db.query(TestPlan).filter(TestPlan.id == plan_id).first()
             if test_plan and test_plan.status != 'completed':
                 test_plan.status = 'completed'
-                test_plan.updated_at = datetime.utcnow()
+                test_plan.updated_at = beijing_now()
                 db.commit()
 
     @staticmethod
@@ -498,7 +499,7 @@ class TestPlanService:
             return None
 
         # 生成新计划编号
-        timestamp = int(datetime.now().timestamp() * 1000) % 1000000
+        timestamp = int(beijing_now().timestamp() * 1000) % 1000000
         plan_number = f"TP-{timestamp:06d}"
 
         while db.query(TestPlan).filter(TestPlan.plan_number == plan_number).first():

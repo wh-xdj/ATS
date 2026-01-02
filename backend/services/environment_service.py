@@ -2,6 +2,7 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
+from utils.datetime_utils import beijing_now
 from models.environment import Environment
 from schemas.environment import EnvironmentCreate, EnvironmentUpdate
 from utils.serializer import serialize_model, serialize_list
@@ -88,7 +89,7 @@ class EnvironmentService:
         
         environment.token = token
         environment.updated_by = current_user_id
-        environment.updated_at = datetime.utcnow()
+        environment.updated_at = beijing_now()
         
         db.commit()
         db.refresh(environment)
@@ -113,7 +114,7 @@ class EnvironmentService:
                 setattr(environment, key, value)
         
         environment.updated_by = current_user_id
-        environment.updated_at = datetime.utcnow()
+        environment.updated_at = beijing_now()
         
         db.commit()
         db.refresh(environment)
@@ -160,7 +161,7 @@ class EnvironmentService:
         environment.memory_info = node_info.get('memory_info')
         environment.cpu_info = node_info.get('cpu_info')
         environment.is_online = True
-        environment.last_heartbeat = datetime.utcnow()
+        environment.last_heartbeat = beijing_now()
         
         db.commit()
         db.refresh(environment)
@@ -198,7 +199,7 @@ class EnvironmentService:
             return {"is_online": False, "message": "节点从未连接"}
         
         # 如果超过5分钟没有心跳，标记为离线
-        time_diff = datetime.utcnow() - environment.last_heartbeat
+        time_diff = beijing_now() - environment.last_heartbeat
         if time_diff.total_seconds() > 300:  # 5分钟
             environment.is_online = False
             db.commit()

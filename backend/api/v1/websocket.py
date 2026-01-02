@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import json
 import asyncio
 from datetime import datetime
+from utils.datetime_utils import beijing_now
 
 
 class ConnectionManager:
@@ -235,7 +236,7 @@ async def websocket_endpoint(
                         # 回复心跳确认
                         await websocket.send_json({
                             "type": "heartbeat_ack",
-                            "timestamp": datetime.utcnow().isoformat()
+                            "timestamp": beijing_now().isoformat()
                         })
                     
                     # 处理任务结果
@@ -360,6 +361,7 @@ async def handle_test_suite_result(db: Session, environment_id: str, message: di
                     # 检查最近一次执行是否有失败的用例
                     has_failed = any(e.result in ["failed", "error"] for e in latest_executions)
                     suite.status = "failed" if has_failed else "completed"
+                    
                     db.commit()
                     logger.info(f"[WebSocket] 测试套执行完成: suite_id={suite_id}, status={suite.status}, 用例数: {len(executed_case_ids)}/{len(suite.case_ids)}")
         
@@ -388,7 +390,7 @@ async def handle_test_suite_log(db: Session, environment_id: str, message: dict)
             return
         
         # 解析时间戳
-        log_timestamp = datetime.utcnow()
+        log_timestamp = beijing_now()
         if timestamp:
             try:
                 # 处理ISO格式时间戳，支持带Z和不带Z的格式
@@ -398,7 +400,7 @@ async def handle_test_suite_log(db: Session, environment_id: str, message: dict)
                     log_timestamp = datetime.fromisoformat(timestamp)
             except Exception as e:
                 logger.warning(f"[WebSocket] 解析时间戳失败: {e}, 使用当前时间")
-                log_timestamp = datetime.utcnow()
+                log_timestamp = beijing_now()
         
         # 查找或创建日志记录（每个execution_id只创建一条记录）
         if execution_id:
@@ -416,9 +418,17 @@ async def handle_test_suite_log(db: Session, environment_id: str, message: dict)
                 log_entry.timestamp = log_timestamp  # 更新最后时间戳
             else:
                 # 如果不存在，创建新记录
+                # 计算序号：获取该测试套的最大序号，然后+1
+                from sqlalchemy import func
+                max_sequence = db.query(func.max(TestSuiteLog.sequence_number)).filter(
+                    TestSuiteLog.suite_id == suite_id,
+                ).scalar() or 0
+                sequence_number = max_sequence + 1
+                
                 log_entry = TestSuiteLog(
                     suite_id=suite_id,
                     execution_id=execution_id,
+                    sequence_number=sequence_number,
                     message=log_message,
                     timestamp=log_timestamp
                 )
@@ -449,6 +459,52 @@ async def handle_test_suite_log(db: Session, environment_id: str, message: dict)
         
         # 推送给所有订阅该测试套日志的前端
         await frontend_manager.broadcast_log(suite_id, log_data)
+        
+        # 如果日志消息包含"测试套执行已取消"或"执行完成"，计算执行耗时并保存到日志记录
+        if execution_id and ("测试套执行已取消" in log_message or "测试套执行完成" in log_message or "执行完成" in log_message):
+            # 从日志消息中解析时间戳来计算执行耗时
+            import re
+            
+            duration_seconds = 0
+            if log_entry.message:
+                # 匹配时间戳格式：[YYYY-MM-DD HH:mm:ss.SSS]
+                timestamp_pattern = r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\]'
+                timestamps = re.findall(timestamp_pattern, log_entry.message)
+                
+                if len(timestamps) >= 2:
+                    # 解析第一条和最后一条日志的时间戳
+                    try:
+                        first_ts_str = timestamps[0]
+                        last_ts_str = timestamps[-1]
+                        first_ts = datetime.strptime(first_ts_str, "%Y-%m-%d %H:%M:%S.%f")
+                        last_ts = datetime.strptime(last_ts_str, "%Y-%m-%d %H:%M:%S.%f")
+                        duration_seconds = (last_ts - first_ts).total_seconds()
+                    except (ValueError, AttributeError):
+                        # 如果解析失败，使用created_at和timestamp的差值作为备选
+                        if log_entry.created_at and log_entry.timestamp:
+                            duration_seconds = (log_entry.timestamp - log_entry.created_at).total_seconds()
+                elif len(timestamps) == 1:
+                    # 如果只有一条日志，使用created_at和timestamp的差值
+                    if log_entry.created_at and log_entry.timestamp:
+                        duration_seconds = (log_entry.timestamp - log_entry.created_at).total_seconds()
+                else:
+                    # 如果没有时间戳，使用created_at和timestamp的差值
+                    if log_entry.created_at and log_entry.timestamp:
+                        duration_seconds = (log_entry.timestamp - log_entry.created_at).total_seconds()
+            
+            # 格式化总耗时并保存到日志记录
+            if duration_seconds > 0:
+                hours = int(duration_seconds // 3600)
+                minutes = int((duration_seconds % 3600) // 60)
+                seconds = duration_seconds % 60
+                log_entry.duration = f"{hours}:{minutes:02d}:{seconds:05.2f}"
+                
+                # 如果是取消，更新测试套状态
+                if "测试套执行已取消" in log_message or "已取消" in log_message:
+                    suite.status = "pending"  # 取消后状态设为pending
+                
+                db.commit()
+                logger.info(f"[WebSocket] 测试套执行耗时已保存到日志: suite_id={suite_id}, execution_id={execution_id}, duration={log_entry.duration}, status={suite.status}")
         
         logger.debug(f"[WebSocket] 测试套日志已存储并推送: suite_id={suite_id}, execution_id={execution_id}, message={log_message[:50]}")
         

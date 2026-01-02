@@ -1,5 +1,5 @@
 """测试套模型"""
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime, JSON, func
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime, JSON, Integer, func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 from database import Base
@@ -67,7 +67,9 @@ class TestSuiteLog(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     suite_id = Column(String(36), ForeignKey("test_suites.id", ondelete="CASCADE"), nullable=False, index=True)
     execution_id = Column(String(36), nullable=True, index=True, comment="执行ID，用于关联同一次执行的所有日志")
+    sequence_number = Column(Integer, nullable=True, index=True, comment="序号，从1开始自增")
     message = Column(Text, nullable=False, comment="日志消息（多行，用换行符分隔）")
+    duration = Column(String(20), nullable=True, comment="执行耗时")
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     

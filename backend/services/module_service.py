@@ -6,6 +6,7 @@ from models.module import Module
 from schemas.module import ModuleCreate, ModuleUpdate
 import uuid
 from datetime import datetime
+from utils.datetime_utils import beijing_now
 
 
 class ModuleService:
@@ -130,7 +131,7 @@ class ModuleService:
         if module_data.description is not None:
             module.description = module_data.description
 
-        module.updated_at = datetime.utcnow()
+        module.updated_at = beijing_now()
 
         db.commit()
         db.refresh(module)

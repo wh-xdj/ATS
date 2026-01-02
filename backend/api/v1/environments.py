@@ -394,10 +394,10 @@ async def get_environment_suite_executions(
             TestSuiteLog.execution_id
         ).order_by(
             func.min(TestSuiteLog.timestamp).desc()
-        ).offset(skip).limit(limit).all()
+        ).all()
         
-        # 获取总数
-        total = log_query.with_entities(TestSuiteLog.execution_id).distinct().count()
+        # 获取总数（先不过滤，后面再过滤）
+        total_before_filter = len(unique_execution_ids)
         
         # 获取每次执行的详细信息
         items = []
@@ -419,9 +419,27 @@ async def get_environment_suite_executions(
             suite = db.query(TestSuite).filter(TestSuite.id == suite_id_val).first()
             if not suite or suite.environment_id != environment_id:
                 continue
+            
+            # 如果测试套正在执行中，检查这个execution_id是否是最新的执行
+            # 如果是，则跳过不显示（因为还在执行中）
+            # 如果不是，则显示（因为这是历史记录）
+            if suite.status == "running":
+                # 检查这个execution_id是否是最新的（通过时间戳判断）
+                # 获取该测试套最新的execution_id
+                latest_log = db.query(TestSuiteLog).filter(
+                    TestSuiteLog.suite_id == suite_id_val
+                ).order_by(TestSuiteLog.timestamp.desc()).first()
+                
+                # 如果这个execution_id是最新的，说明正在执行中，跳过
+                if latest_log and latest_log.execution_id == execution_id_val:
+                    continue
+            
             suite_name = suite.name if suite else "未知测试套"
             
-            # 从TestSuiteExecution表获取执行记录（匹配suite_id和executed_at时间相近的记录）
+            # 从日志记录的duration字段获取执行耗时（如果已计算）
+            duration = log_record.duration if log_record.duration else None
+            
+            # 从TestSuiteExecution表获取执行记录（用于判断结果和执行人）
             time_window_start = exec_time - timedelta(minutes=5)
             time_window_end = exec_time + timedelta(minutes=5)
             exec_records = db.query(TestSuiteExecution).filter(
@@ -437,11 +455,20 @@ async def get_environment_suite_executions(
                 ).order_by(TestSuiteExecution.executed_at.desc()).limit(1).all()
             
             if not exec_records:
-                # 如果没有执行记录，使用日志记录的信息
+                # 如果没有执行记录，检查是否有取消相关的日志
+                from models.test_suite import TestSuiteLog
+                cancel_log = db.query(TestSuiteLog).filter(
+                    TestSuiteLog.suite_id == suite_id_val,
+                    TestSuiteLog.execution_id == execution_id_val,
+                    TestSuiteLog.message.like("%取消%")
+                ).first()
+                if cancel_log:
+                    overall_result = "cancelled"
+                else:
+                    overall_result = "unknown"
+                
                 executor_id_val = None
                 executor_name = "未知用户"
-                duration = None
-                overall_result = "unknown"
                 exec_time_iso = exec_time.isoformat() if exec_time else None
             else:
                 # 获取执行人信息
@@ -449,17 +476,31 @@ async def get_environment_suite_executions(
                 executor_id_val = exec_records[0].executor_id
                 executor_name = executor.username if executor else "未知用户"
                 
-                # 计算总耗时（取第一条记录的duration，如果有的话）
-                duration = exec_records[0].duration if exec_records[0].duration else None
+                # 确定整体结果
+                # 优先级：取消 > 失败/错误 > 跳过 > 通过
+                # 先检查是否有取消相关的日志（即使有执行记录，也可能是被取消的）
+                from models.test_suite import TestSuiteLog
+                cancel_log = db.query(TestSuiteLog).filter(
+                    TestSuiteLog.suite_id == suite_id_val,
+                    TestSuiteLog.execution_id == execution_id_val,
+                    TestSuiteLog.message.like("%取消%")
+                ).first()
                 
-                # 确定整体结果（如果有失败的，整体为失败；否则为通过）
-                overall_result = "passed"
-                for record in exec_records:
-                    if record.result in ["failed", "error"]:
-                        overall_result = "failed"
-                        break
-                    elif record.result == "skipped" and overall_result == "passed":
-                        overall_result = "skipped"
+                if cancel_log:
+                    # 如果有取消日志，优先标记为取消
+                    overall_result = "cancelled"
+                else:
+                    # 否则根据执行记录判断
+                    overall_result = "passed"
+                    for record in exec_records:
+                        if record.result in ["failed", "error"]:
+                            overall_result = "failed"
+                            break
+                        elif record.result == "cancelled":
+                            overall_result = "cancelled"
+                            break
+                        elif record.result == "skipped" and overall_result == "passed":
+                            overall_result = "skipped"
                 
                 # 使用日志记录的timestamp作为执行时间，而不是TestSuiteExecution的executed_at
                 exec_time_iso = exec_time.isoformat() if exec_time else None
@@ -501,11 +542,15 @@ async def get_environment_suite_executions(
         # 按执行时间排序
         items.sort(key=lambda x: x.get("executedAt") or "", reverse=True)
         
+        # 应用分页（在过滤后）
+        total = len(items)
+        paginated_items = items[skip:skip + limit]
+        
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
             data={
-                "items": items,
+                "items": paginated_items,
                 "total": total,
                 "skip": skip,
                 "limit": limit

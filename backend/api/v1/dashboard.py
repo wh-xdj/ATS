@@ -12,6 +12,7 @@ from models.test_execution import TestExecution
 from core.logger import logger
 from typing import Optional
 from datetime import datetime, timedelta
+from utils.datetime_utils import beijing_now
 import math
 
 router = APIRouter()
@@ -39,7 +40,7 @@ async def get_overview_stats(
         active_plans = plans_query.scalar() or 0
         
         # 计算执行成功率（基于最近30天的执行记录）
-        thirty_days_ago = datetime.now() - timedelta(days=30)
+        thirty_days_ago = beijing_now() - timedelta(days=30)
         exec_query = db.query(TestExecution).filter(
             TestExecution.executed_at >= thirty_days_ago
         )
@@ -51,7 +52,7 @@ async def get_overview_stats(
         success_rate = round((passed_executions / total_executions * 100), 1) if total_executions > 0 else 0
         
         # 本月用例数
-        current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        current_month_start = beijing_now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         cases_query = db.query(func.count(TestCase.id)).filter(
             TestCase.created_at >= current_month_start
         )
@@ -96,7 +97,7 @@ async def get_trends(
     """获取趋势数据 - 从数据库获取真实数据"""
     try:
         days = 7 if period == "week" else (30 if period == "month" else 90)
-        base_date = datetime.now()
+        base_date = beijing_now()
         
         dates = []
         executions = []
@@ -225,7 +226,7 @@ async def get_execution_analysis(
     """获取执行分析数据 - 从数据库获取真实数据"""
     try:
         days = 7 if period == "week" else (30 if period == "month" else 90)
-        base_date = datetime.now()
+        base_date = beijing_now()
         
         dates = []
         passed_data = []
@@ -303,7 +304,7 @@ async def get_recent_activities(
                 "type": "case",
                 "title": "创建了测试用例",
                 "description": case.name[:50] + "..." if len(case.name) > 50 else case.name,
-                "timestamp": case.created_at.isoformat() if case.created_at else datetime.now().isoformat()
+                "timestamp": case.created_at.isoformat() if case.created_at else beijing_now().isoformat()
             })
         
         # 获取最近的执行记录
@@ -319,7 +320,7 @@ async def get_recent_activities(
                 "type": "execution",
                 "title": f"执行测试用例 - {result_text}",
                 "description": f"用例ID: {execution.case_id[:8]}...",
-                "timestamp": execution.executed_at.isoformat() if execution.executed_at else datetime.now().isoformat()
+                "timestamp": execution.executed_at.isoformat() if execution.executed_at else beijing_now().isoformat()
             })
         
         # 获取最近创建的测试计划
@@ -334,7 +335,7 @@ async def get_recent_activities(
                 "type": "plan",
                 "title": "创建了测试计划",
                 "description": plan.name[:50] + "..." if len(plan.name) > 50 else plan.name,
-                "timestamp": plan.created_at.isoformat() if plan.created_at else datetime.now().isoformat()
+                "timestamp": plan.created_at.isoformat() if plan.created_at else beijing_now().isoformat()
             })
         
         # 按时间排序
@@ -403,7 +404,7 @@ async def get_project_stats(
             last_exec_time = last_execution[0].isoformat() if last_execution and last_execution[0] else None
             
             # 计算执行趋势（对比上周和本周）
-            now = datetime.now()
+            now = beijing_now()
             this_week_start = now - timedelta(days=now.weekday())
             last_week_start = this_week_start - timedelta(days=7)
             

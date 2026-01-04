@@ -35,6 +35,7 @@ class TestSuiteUpdate(BaseModel):
     execution_command: Optional[str] = None
     case_ids: Optional[List[str]] = None
     status: Optional[str] = None
+    plan_id: Optional[str] = None  # 允许修改关联的测试计划
 
 
 class TestSuiteResponse(TestSuiteBase):

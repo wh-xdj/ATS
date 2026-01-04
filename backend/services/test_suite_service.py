@@ -110,6 +110,13 @@ class TestSuiteService:
         if not suite:
             return None
         
+        # 如果更新计划，验证计划是否存在
+        new_plan = None
+        if "plan_id" in suite_data:
+            new_plan = db.query(TestPlan).filter(TestPlan.id == suite_data["plan_id"]).first()
+            if not new_plan:
+                raise ValueError("测试计划不存在")
+        
         # 如果更新环境，验证环境是否在线
         if "environment_id" in suite_data:
             environment = db.query(Environment).filter(Environment.id == suite_data["environment_id"]).first()
@@ -118,7 +125,7 @@ class TestSuiteService:
             if not environment.is_online:
                 raise ValueError("执行环境未在线")
         
-        # 如果更新用例，验证用例是否都是自动化用例
+        # 如果更新用例，验证用例是否都是自动化用例，并且属于新计划的项目（如果计划改变了）
         if "case_ids" in suite_data:
             case_ids = suite_data["case_ids"]
             if case_ids:
@@ -126,9 +133,23 @@ class TestSuiteService:
                 if len(cases) != len(case_ids):
                     raise ValueError("部分测试用例不存在")
                 
+                # 确定要验证的项目ID（如果计划改变了，使用新计划的项目ID；否则使用原计划的项目ID）
+                target_project_id = None
+                if new_plan:
+                    # 计划改变了，使用新计划的项目ID
+                    target_project_id = new_plan.project_id
+                elif suite.plan_id:
+                    # 计划没改变，使用原计划的项目ID
+                    current_plan = db.query(TestPlan).filter(TestPlan.id == suite.plan_id).first()
+                    if current_plan:
+                        target_project_id = current_plan.project_id
+                
                 for case in cases:
                     if not case.is_automated:
                         raise ValueError(f"用例 {case.name} 不是自动化用例")
+                    # 如果确定了目标项目ID，验证用例是否属于该项目
+                    if target_project_id and case.project_id != target_project_id:
+                        raise ValueError(f"用例 {case.name} 不属于测试计划的项目")
         
         # 更新字段
         # 注意：允许显式设置None值来清除字段（如Git配置）

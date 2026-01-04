@@ -14,7 +14,7 @@
       :label-col="{ span: 6 }"
       :wrapper-col="{ span: 18 }"
     >
-      <a-form-item label="测试计划" name="planId" v-if="!suiteId">
+      <a-form-item label="关联测试计划" name="planId">
         <a-select
           v-model:value="formData.planId"
           placeholder="请选择测试计划"
@@ -95,21 +95,35 @@
       <a-divider>执行配置</a-divider>
 
       <a-form-item label="执行环境" name="environmentId">
-        <a-select
-          v-model:value="formData.environmentId"
-          placeholder="请选择执行环境"
-          :loading="loadingEnvironments"
-          :filter-option="filterEnvironment"
-          show-search
-        >
-          <a-select-option
-            v-for="env in onlineEnvironments"
-            :key="env.id"
-            :value="env.id"
+        <a-space>
+          <a-select
+            v-model:value="formData.environmentId"
+            placeholder="请选择执行环境（支持搜索名称或IP）"
+            :loading="loadingEnvironments"
+            :filter-option="filterEnvironment"
+            show-search
+            :option-filter-prop="'label'"
+            style="width: 400px"
+            allow-clear
           >
-            {{ env.name }} ({{ env.nodeIp || '未知IP' }})
-          </a-select-option>
-        </a-select>
+            <a-select-option
+              v-for="env in onlineEnvironments"
+              :key="env.id"
+              :value="env.id"
+              :label="`${env.name} (${env.nodeIp || '未知IP'})`"
+            >
+              {{ env.name }} ({{ env.nodeIp || '未知IP' }})
+            </a-select-option>
+          </a-select>
+          <a-button
+            type="default"
+            :loading="loadingEnvironments"
+            @click="loadEnvironments"
+            title="刷新环境列表"
+          >
+            <template #icon><ReloadOutlined /></template>
+          </a-button>
+        </a-space>
         <div v-if="onlineEnvironments.length === 0" style="color: #ff4d4f; margin-top: 4px;">
           没有在线的执行环境，请先启动Agent
         </div>
@@ -189,6 +203,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
+import { ReloadOutlined } from '@ant-design/icons-vue'
 import { testSuiteApi, type TestSuite, type TestSuiteCreate } from '@/api/testSuite'
 import { environmentApi } from '@/api/environment'
 import { testPlanApi } from '@/api/testPlan'
@@ -249,19 +264,23 @@ const formData = reactive<TestSuiteCreate & { caseIds: string[]; planId?: string
 const environments = ref<Environment[]>([])
 const selectedCases = ref<TestCase[]>([])
 
+// 保存编辑模式下的原始计划ID和用例ID，用于判断计划是否改变
+const originalPlanId = ref<string>('')
+const originalCaseIds = ref<string[]>([])
+
 const onlineEnvironments = computed(() => {
   return environments.value.filter(env => env.isOnline || env.is_online)
 })
 
 const currentProjectId = computed(() => {
-  if (props.suiteId && props.planId) {
-    // 编辑模式，从计划获取项目ID
-    const plan = plans.value.find(p => p.id === props.planId)
+  // 优先从 formData.planId 获取（支持编辑时修改计划）
+  if (formData.planId) {
+    const plan = plans.value.find(p => p.id === formData.planId)
     return plan?.projectId || ''
   }
-  if (formData.planId) {
-    // 创建模式，从选中的计划获取项目ID
-    const plan = plans.value.find(p => p.id === formData.planId)
+  // 编辑模式下，如果 formData.planId 为空，使用 props.planId 作为后备
+  if (props.suiteId && props.planId) {
+    const plan = plans.value.find(p => p.id === props.planId)
     return plan?.projectId || ''
   }
   return ''
@@ -281,10 +300,24 @@ const filterPlan = (input: string, option: any) => {
          getProjectName(plan.projectId).toLowerCase().includes(searchText)
 }
 
-const handlePlanChange = () => {
-  // 计划改变时，清空用例选择
-  formData.caseIds = []
-  selectedCases.value = []
+const handlePlanChange = async () => {
+  // 如果是编辑模式，检查选择的计划是否是原始计划
+  if (props.suiteId && originalPlanId.value) {
+    if (formData.planId === originalPlanId.value) {
+      // 选择的是原始计划，恢复原始的用例选择
+      formData.caseIds = [...originalCaseIds.value]
+      // 重新加载用例信息
+      await loadCasesInfo()
+    } else {
+      // 选择的是不同的计划，清空用例选择
+      formData.caseIds = []
+      selectedCases.value = []
+    }
+  } else {
+    // 创建模式，计划改变时清空用例选择
+    formData.caseIds = []
+    selectedCases.value = []
+  }
 }
 
 const handleGitConfigToggle = async (checked: boolean) => {
@@ -370,7 +403,11 @@ const getPriorityColor = (priority: string) => {
 }
 
 const filterEnvironment = (input: string, option: any) => {
-  return option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+  if (!input) return true
+  const searchText = input.toLowerCase()
+  // 搜索环境名称和IP地址
+  const label = option.label || option.children?.toString() || ''
+  return label.toLowerCase().includes(searchText)
 }
 
 const loadEnvironments = async () => {
@@ -406,19 +443,7 @@ const loadEnvironments = async () => {
 }
 
 const loadPlans = async () => {
-  if (props.suiteId && props.planId) {
-    // 编辑模式，只加载当前计划
-    try {
-      const plan = await testPlanApi.getTestPlan(props.planId)
-      plans.value = [plan]
-      formData.planId = plan.id
-    } catch (error) {
-      console.error('Failed to load plan:', error)
-    }
-    return
-  }
-
-  // 创建模式，加载所有计划
+  // 编辑模式和创建模式都加载所有计划，以便用户可以修改
   loadingPlans.value = true
   try {
     const allPlansList: (TestPlan & { projectName?: string })[] = []
@@ -441,6 +466,11 @@ const loadPlans = async () => {
     }
     
     plans.value = allPlansList
+    
+    // 编辑模式下，设置当前计划ID
+    if (props.suiteId && props.planId) {
+      formData.planId = props.planId
+    }
   } catch (error) {
     console.error('Failed to load plans:', error)
   } finally {
@@ -461,6 +491,13 @@ const loadSuite = async () => {
     formData.environmentId = suite.environmentId
     formData.executionCommand = suite.executionCommand
     formData.caseIds = suite.caseIds || []
+    
+    // 保存原始的 planId 和 caseIds，用于判断计划是否改变
+    if (props.planId) {
+      originalPlanId.value = props.planId
+      formData.planId = props.planId
+    }
+    originalCaseIds.value = [...(suite.caseIds || [])]
     
     // 根据git_enabled字段设置开关状态（如果不存在，则根据git配置判断）
     enableGitConfig.value = suite.gitEnabled === 'true' || (!suite.gitEnabled && !!(suite.gitRepoUrl && suite.gitBranch))
@@ -555,13 +592,18 @@ const handleSave = async () => {
     
     let suite: TestSuite
     if (props.suiteId) {
-      // 更新时不需要 plan_id
+      // 更新时需要包含 plan_id（如果计划改变了）
       const updateData: any = {
         name: suiteData.name,
         description: suiteData.description || null,
         environment_id: suiteData.environment_id,
         execution_command: suiteData.execution_command,
         case_ids: suiteData.case_ids
+      }
+      
+      // 如果计划改变了，需要更新 plan_id
+      if (formData.planId && formData.planId !== originalPlanId.value) {
+        updateData.plan_id = formData.planId
       }
       
       // 保存git配置启用状态
@@ -608,6 +650,8 @@ const handleCancel = () => {
   })
   enableGitConfig.value = false
   selectedCases.value = []
+  originalPlanId.value = ''
+  originalCaseIds.value = []
   emit('update:visible', false)
   emit('cancel')
 }

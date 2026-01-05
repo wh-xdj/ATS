@@ -9,6 +9,8 @@ from schemas.test_suite import TestSuiteCreate, TestSuiteUpdate, TestSuiteRespon
 from schemas.common import APIResponse, ResponseStatus
 from utils.serializer import serialize_model, serialize_list
 from typing import Optional
+from datetime import timedelta
+from core.logger import logger
 
 router = APIRouter()
 
@@ -181,10 +183,19 @@ async def execute_test_suite(
         from services.environment_service import EnvironmentService
         from services.task_queue_service import TaskQueueService
         environment = EnvironmentService.get_environment(db, suite.environment_id)
-        if not environment or not environment.get("isOnline"):
+        if not environment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="执行环境不存在"
+            )
+        
+        # 检查环境在线状态（兼容 isOnline 和 is_online）
+        is_online = environment.get("isOnline") or environment.get("is_online", False)
+        if not is_online:
+            env_name = environment.get("name", "未知环境")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="执行环境未在线"
+                detail=f"执行环境\"{env_name}\"未在线，请先启动Agent"
             )
         
         # 生成执行ID（用于关联本次执行的所有日志）
@@ -315,10 +326,19 @@ async def cancel_test_suite(
             )
         
         environment = EnvironmentService.get_environment(db, suite.environment_id)
-        if not environment or not environment.get("isOnline"):
+        if not environment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="执行环境不存在"
+            )
+        
+        # 检查环境在线状态（兼容 isOnline 和 is_online）
+        is_online = environment.get("isOnline") or environment.get("is_online", False)
+        if not is_online:
+            env_name = environment.get("name", "未知环境")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="执行环境未在线"
+                detail=f"执行环境\"{env_name}\"未在线，请先启动Agent"
             )
         
         execution_id = request.executionId

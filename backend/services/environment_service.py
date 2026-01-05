@@ -2,7 +2,7 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
-from utils.datetime_utils import beijing_now
+from utils.datetime_utils import beijing_now, BEIJING_TZ
 from models.environment import Environment
 from schemas.environment import EnvironmentCreate, EnvironmentUpdate
 from utils.serializer import serialize_model, serialize_list
@@ -20,6 +20,9 @@ class EnvironmentService:
         environments = db.query(Environment).offset(skip).limit(limit).all()
         result = []
         for env in environments:
+            # 实时检查心跳时间，更新在线状态
+            EnvironmentService._check_and_update_online_status(db, env)
+            
             env_dict = serialize_model(env, camel_case=True)
             # 检查是否有正在运行的任务
             running_count = TaskQueueService.get_running_task_count(db, env.id)
@@ -34,6 +37,10 @@ class EnvironmentService:
         environment = db.query(Environment).filter(Environment.id == environment_id).first()
         if not environment:
             return None
+        
+        # 实时检查心跳时间，更新在线状态
+        EnvironmentService._check_and_update_online_status(db, environment)
+        
         env_dict = serialize_model(environment, camel_case=True)
         # 检查是否有正在运行的任务
         running_count = TaskQueueService.get_running_task_count(db, environment_id)
@@ -198,6 +205,32 @@ class EnvironmentService:
         return True
     
     @staticmethod
+    def _check_and_update_online_status(db: Session, environment: Environment) -> None:
+        """
+        检查并更新节点的在线状态（内部方法）
+        如果节点超过一定时间没有心跳，标记为离线
+        """
+        if not environment.last_heartbeat:
+            # 如果没有心跳记录，标记为离线
+            if environment.is_online:
+                environment.is_online = False
+                db.commit()
+            return
+        
+        # 处理时区问题：如果last_heartbeat是naive datetime，需要转换为带时区的datetime
+        last_heartbeat = environment.last_heartbeat
+        if last_heartbeat.tzinfo is None:
+            # 如果是naive datetime，假设它是北京时间
+            last_heartbeat = last_heartbeat.replace(tzinfo=BEIJING_TZ)
+        
+        # 如果超过5分钟没有心跳，标记为离线
+        time_diff = beijing_now() - last_heartbeat
+        if time_diff.total_seconds() > 300:  # 5分钟
+            if environment.is_online:
+                environment.is_online = False
+                db.commit()
+    
+    @staticmethod
     def check_node_status(db: Session, environment_id: str) -> Dict[str, Any]:
         """
         检查节点状态（用于定时任务）
@@ -207,16 +240,13 @@ class EnvironmentService:
         if not environment:
             return {"is_online": False, "message": "节点不存在"}
         
+        # 使用内部方法检查并更新状态
+        EnvironmentService._check_and_update_online_status(db, environment)
+        
         if not environment.last_heartbeat:
-            environment.is_online = False
-            db.commit()
             return {"is_online": False, "message": "节点从未连接"}
         
-        # 如果超过5分钟没有心跳，标记为离线
-        time_diff = beijing_now() - environment.last_heartbeat
-        if time_diff.total_seconds() > 300:  # 5分钟
-            environment.is_online = False
-            db.commit()
+        if not environment.is_online:
             return {"is_online": False, "message": "节点超时未响应"}
         
         return {"is_online": environment.is_online, "message": "节点在线"}

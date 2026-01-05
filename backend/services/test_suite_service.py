@@ -117,13 +117,12 @@ class TestSuiteService:
             if not new_plan:
                 raise ValueError("测试计划不存在")
         
-        # 如果更新环境，验证环境是否在线
+        # 如果更新环境，验证环境是否存在（不检查在线状态，允许离线时编辑保存）
         if "environment_id" in suite_data:
             environment = db.query(Environment).filter(Environment.id == suite_data["environment_id"]).first()
             if not environment:
                 raise ValueError("执行环境不存在")
-            if not environment.is_online:
-                raise ValueError("执行环境未在线")
+            # 注意：编辑保存时不检查环境在线状态，只有在执行时才检查
         
         # 如果更新用例，验证用例是否都是自动化用例，并且属于新计划的项目（如果计划改变了）
         if "case_ids" in suite_data:

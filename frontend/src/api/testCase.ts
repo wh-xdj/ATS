@@ -77,22 +77,16 @@ export const testCaseApi = {
 
   importCases: async (
     projectId: string,
-    file: File,
-    options?: { overwrite?: boolean; validateOnly?: boolean }
+    file: File
   ): Promise<{
     total: number
     created: number
     updated: number
-    failed: number
-    errors: string[]
+    deleted: number
+    no_change: number
   }> => {
     const formData = new FormData()
     formData.append('file', file)
-    if (options) {
-      Object.entries(options).forEach(([key, value]) => {
-        formData.append(key, String(value))
-      })
-    }
     
     return apiClient.post(`/projects/${projectId}/cases/import`, formData, {
       headers: {
@@ -103,6 +97,7 @@ export const testCaseApi = {
 
   exportCases: async (projectId: string, params?: {
     moduleId?: string
+    moduleIds?: string  // 逗号分隔的模块 ID 列表（包含子模块）
     status?: string
     priority?: string
     type?: string
@@ -111,13 +106,16 @@ export const testCaseApi = {
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value))
+          // 将 camelCase 转换为 snake_case
+          const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase()
+          queryParams.append(snakeKey, String(value))
         }
       })
     }
     
+    // 使用相对路径，因为 baseURL 已经包含了 /api/v1
     const response = await apiClient.getInstance().get(
-      `/api/v1/projects/${projectId}/cases/export?${queryParams.toString()}`,
+      `projects/${projectId}/cases/export?${queryParams.toString()}`,
       { responseType: 'blob' }
     )
     
@@ -126,11 +124,36 @@ export const testCaseApi = {
 
   getCaseTemplate: async (projectId: string): Promise<Blob> => {
     const response = await apiClient.getInstance().get(
-      `/api/v1/projects/${projectId}/cases/template`,
+      `projects/${projectId}/cases/template`,
       { responseType: 'blob' }
     )
     
     return response.data
+  },
+  
+  validateImport: async (
+    projectId: string,
+    file: File
+  ): Promise<{
+    total: number
+    validated: number
+    errors: number
+    error_details: string[]
+    validation_errors: Array<{
+      row: number
+      id: string
+      name: string
+      errors: string[]
+    }>
+  }> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    return apiClient.post(`/projects/${projectId}/cases/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
   },
 
   copyCase: async (

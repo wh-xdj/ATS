@@ -42,8 +42,18 @@ class ApiClient {
       (response: AxiosResponse<ApiResponse>) => {
         const data = response.data
         
+        // 跳过 blob 响应的业务错误处理（文件下载等）
+        if (response.config.responseType === 'blob') {
+          return response
+        }
+        
         // 处理业务错误
-        if (data.status === 'error') {
+        // 对于导入API，即使status是error，也要返回响应让前端处理详细错误信息
+        if (data && typeof data === 'object' && 'status' in data && data.status === 'error') {
+          // 如果是导入API，不在这里显示错误，让前端处理
+          if (config?.url?.includes('/cases/import')) {
+            return response
+          }
           message.error(data.message)
           return Promise.reject(new Error(data.message))
         }

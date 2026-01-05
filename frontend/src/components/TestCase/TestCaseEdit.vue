@@ -77,9 +77,10 @@
                   :tree-data="moduleTreeData"
                   placeholder="请选择模块"
                   style="width: 100%"
-                  :field-names="{ label: 'name', value: 'id', children: 'children' }"
+                  :field-names="{ label: 'title', value: 'id', children: 'children' }"
                   tree-default-expand-all
                   allow-clear
+                  :tree-node-label-prop="'title'"
                 />
               </a-form-item>
             </a-col>
@@ -478,8 +479,10 @@ const loadTestCase = async () => {
 const loadModuleTree = async () => {
   try {
     const response = await projectApi.getModules(props.projectId)
+    // API 返回格式可能是 { modules: [...], totalCaseCount: ... } 或直接是数组
+    const moduleList = response.modules || response || []
     // 转换为树形结构
-    moduleTreeData.value = buildTreeData(response)
+    moduleTreeData.value = buildTreeData(Array.isArray(moduleList) ? moduleList : [])
   } catch (error) {
     console.error('Failed to load modules:', error)
   }
@@ -489,21 +492,55 @@ const buildTreeData = (modules: any[]): any[] => {
   const treeMap = new Map()
   const treeData: any[] = []
 
-  // 构建映射
+  // 构建映射（包含原始模块数据）
   modules.forEach(module => {
     treeMap.set(module.id, {
       id: module.id,
       name: module.name,
-      parentId: module.parentId,
-      children: []
+      title: module.name, // 添加 title 字段用于显示
+      parentId: module.parentId || module.parent_id, // 兼容两种字段名
+      children: [],
+      raw: module
     })
+  })
+
+  // 构建模块路径的函数
+  const getModulePath = (moduleId: string): string => {
+    if (!moduleId || !treeMap.has(moduleId)) {
+      return ''
+    }
+    
+    const pathParts: string[] = []
+    let currentId: string | null = moduleId
+    
+    // 递归向上查找父模块，构建路径
+    const visited = new Set<string>() // 防止循环引用
+    while (currentId && treeMap.has(currentId) && !visited.has(currentId)) {
+      visited.add(currentId)
+      const moduleNode = treeMap.get(currentId)
+      pathParts.unshift(moduleNode.name) // 从前面插入，保持顺序
+      currentId = moduleNode.parentId || null
+    }
+    
+    return pathParts.join('/')
+  }
+
+  // 为每个模块节点添加路径显示名称
+  modules.forEach(module => {
+    const node = treeMap.get(module.id)
+    const path = getModulePath(module.id)
+    // 使用路径作为显示名称，如果路径为空则使用模块名称
+    const displayName = path || module.name
+    node.name = displayName
+    node.title = displayName // 同时设置 title 字段
   })
 
   // 构建树形结构
   modules.forEach(module => {
     const node = treeMap.get(module.id)
-    if (module.parentId && treeMap.has(module.parentId)) {
-      treeMap.get(module.parentId).children.push(node)
+    const parentId = module.parentId || module.parent_id
+    if (parentId && treeMap.has(parentId)) {
+      treeMap.get(parentId).children.push(node)
     } else {
       treeData.push(node)
     }

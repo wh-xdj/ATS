@@ -67,11 +67,16 @@
             <template v-if="contextMenuNodeType === 'virtual'">
               <a-menu-item key="addModule">新增模块</a-menu-item>
               <a-menu-item key="addCase">新增用例</a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="export">导出用例</a-menu-item>
             </template>
             <!-- 模块节点显示全部操作 -->
             <template v-else-if="contextMenuNodeType === 'module'">
               <a-menu-item key="addModule">新增子模块</a-menu-item>
               <a-menu-item key="addCase">新增用例</a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="export">导出用例</a-menu-item>
+              <a-menu-divider />
               <a-menu-item key="rename">重命名</a-menu-item>
               <a-menu-item key="delete">删除</a-menu-item>
               <a-menu-divider v-if="selectedModuleKeys.length > 1" />
@@ -1107,9 +1112,69 @@ const handleImportSuccess = async (result: any) => {
 }
 
 // 批量操作
-const handleExport = ({ key }: { key: string }) => {
+const handleExport = async ({ key }: { key: string }) => {
+  if (!projectId.value) {
+    message.warning('请先选择项目')
+    return
+  }
+
   if (key === 'excel') {
-    message.info('导出Excel功能开发中...')
+    try {
+      // 获取当前选中的模块
+      const selectedModule = selectedModuleKeys.value[0]
+      
+      // 构建导出参数
+      const exportParams: any = {}
+      
+      // 如果选中的是模块（不是"全部用例"），则传递模块ID
+      if (selectedModule && selectedModule !== 'all') {
+        // 获取当前模块及其所有子模块的 ID
+        const moduleIds = getModuleAndChildrenIds(selectedModule)
+        exportParams.moduleIds = moduleIds.join(',')
+      }
+      // 如果选中的是"全部用例"，则不传递 moduleIds，导出全部用例
+      
+      // 应用当前的筛选条件
+      if (filters.level) {
+        exportParams.priority = filters.level
+      }
+      if (filters.executionResult) {
+        exportParams.status = filters.executionResult
+      }
+      
+      // 显示加载提示
+      const hide = message.loading('正在导出，请稍候...', 0)
+      
+      try {
+        // 调用导出API
+        const blob = await testCaseApi.exportCases(projectId.value, exportParams)
+        
+        // 创建下载链接
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        
+        // 生成文件名
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_')
+        const moduleName = selectedModule && selectedModule !== 'all' 
+          ? (findModuleById(selectedModule)?.name || '模块') 
+          : '全部用例'
+        link.download = `测试用例_${moduleName}_${timestamp}.xlsx`
+        
+        // 触发下载
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        
+        message.success('导出成功')
+      } finally {
+        hide()
+      }
+    } catch (error) {
+      console.error('导出失败:', error)
+      message.error('导出失败，请稍后重试')
+    }
   } else if (key === 'xmind') {
     message.info('导出思维导图功能开发中...')
   }
@@ -1325,7 +1390,9 @@ const handleModuleContextMenuClick = ({ key }: { key: string }) => {
     handleBatchDeleteModules()
   } else if (key === 'deleteCase') {
     handleDeleteCaseFromTree(node)
-}
+  } else if (key === 'export') {
+    handleExportFromTree(node)
+  }
 }
 
 // 从树节点删除用例
@@ -1531,6 +1598,62 @@ const handleBatchDeleteModules = () => {
       }
     }
   })
+}
+
+// 从模块树右键菜单导出
+const handleExportFromTree = async (node: any) => {
+  if (!projectId.value) {
+    message.warning('请先选择项目')
+    return
+  }
+
+  try {
+    const nodeKey = node.key as string
+    
+    // 构建导出参数
+    const exportParams: any = {}
+    
+    // 如果选中的是模块（不是"全部用例"），则传递模块ID
+    if (nodeKey && nodeKey !== 'all') {
+      // 获取当前模块及其所有子模块的 ID
+      const moduleIds = getModuleAndChildrenIds(nodeKey)
+      exportParams.moduleIds = moduleIds.join(',')
+    }
+    // 如果选中的是"全部用例"，则不传递 moduleIds，导出全部用例
+    
+    // 显示加载提示
+    const hide = message.loading('正在导出，请稍候...', 0)
+    
+    try {
+      // 调用导出API
+      const blob = await testCaseApi.exportCases(projectId.value, exportParams)
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // 生成文件名
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_')
+      const moduleName = nodeKey && nodeKey !== 'all' 
+        ? (node.title || findModuleById(nodeKey)?.name || '模块') 
+        : '全部用例'
+      link.download = `测试用例_${moduleName}_${timestamp}.xlsx`
+      
+      // 触发下载
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      message.success('导出成功')
+    } finally {
+      hide()
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    message.error('导出失败，请稍后重试')
+  }
 }
 
 // 工具函数

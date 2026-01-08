@@ -303,6 +303,7 @@ import { PlusOutlined, ReloadOutlined, DownOutlined, BellOutlined } from '@ant-d
 import dayjs, { Dayjs } from 'dayjs'
 import { testCaseApi } from '@/api/testCase'
 import { testPlanApi } from '@/api/testPlan'
+import { projectApi } from '@/api/project'
 import TestCaseSelector from '@/components/TestCase/TestCaseSelector.vue'
 import type { TestCase, TestPlan, Environment } from '@/types'
 
@@ -345,6 +346,7 @@ const formData = reactive({
 
 const selectedCases = ref<TestCase[]>([])
 const environments = ref<Environment[]>([])
+const modules = ref<any[]>([])  // 模块列表，用于获取模块名称
 
 // 用例表格分页配置
 const casePagination = reactive({
@@ -434,6 +436,17 @@ const caseColumns = [
 ]
 
 // 方法
+const loadModules = async () => {
+  if (!props.projectId) return
+  
+  try {
+    const response = await projectApi.getModules(props.projectId)
+    modules.value = response.modules || response || []
+  } catch (error) {
+    console.error('Failed to load modules:', error)
+  }
+}
+
 const loadEnvironments = async () => {
   try {
     environments.value = [
@@ -468,34 +481,54 @@ const loadPlanData = async () => {
 
   loading.value = true
   try {
-    const response = await testPlanApi.getTestPlan(props.planId)
-    const plan = response.data || response
+    // apiClient.get 已经返回了 response.data.data，所以这里直接使用
+    const plan = await testPlanApi.getTestPlan(props.planId)
 
     if (!plan) {
       message.error('计划不存在')
       return
     }
 
+    console.log('加载的计划数据:', plan)
+
+    // 确保字段映射正确（兼容 camelCase 和 snake_case）
     Object.assign(formData, {
       name: plan.name || '',
-      planType: plan.planType || 'manual',
+      planType: plan.planType || (plan as any).plan_type || 'manual',
       description: plan.description || '',
       notes: plan.notes || '',
-      startDate: plan.startDate ? dayjs(plan.startDate) : null,
-      endDate: plan.endDate ? dayjs(plan.endDate) : null,
-      environmentId: plan.environmentId || '',
-      environmentConfig: plan.environmentConfig || {},
-      executionStrategy: plan.executionStrategy || 'sequential',
-      retryOnFailure: plan.retryOnFailure || false,
-      retryCount: plan.retryCount || 2,
-      notificationMethods: plan.notificationMethods || [],
-      notificationRecipients: plan.notificationRecipients || [],
-      notificationEvents: plan.notificationEvents || []
+      startDate: (plan.startDate || (plan as any).start_date) ? dayjs(plan.startDate || (plan as any).start_date) : null,
+      endDate: (plan.endDate || (plan as any).end_date) ? dayjs(plan.endDate || (plan as any).end_date) : null,
+      environmentId: plan.environmentId || (plan as any).environment_id || '',
+      environmentConfig: plan.environmentConfig || (plan as any).environment_config || {},
+      executionStrategy: plan.executionStrategy || (plan as any).execution_strategy || 'sequential',
+      retryOnFailure: plan.retryOnFailure !== undefined ? plan.retryOnFailure : ((plan as any).retry_on_failure !== undefined ? (plan as any).retry_on_failure : false),
+      retryCount: plan.retryCount || (plan as any).retry_count || 2,
+      notificationMethods: plan.notificationMethods || (plan as any).notification_methods || [],
+      notificationRecipients: plan.notificationRecipients || (plan as any).notification_recipients || [],
+      notificationEvents: plan.notificationEvents || (plan as any).notification_events || []
     })
 
+    console.log('填充后的表单数据:', formData)
+
     if (plan.testCases && Array.isArray(plan.testCases)) {
-      selectedCases.value = plan.testCases
-      casePagination.total = plan.testCases.length
+      // 为用例添加模块名称
+      const casesWithModuleName = plan.testCases.map((c: any) => {
+        const caseObj: any = { ...c }
+        if (!caseObj.moduleName && caseObj.moduleId) {
+          const module = modules.value.find(m => m.id === caseObj.moduleId)
+          if (module) {
+            caseObj.moduleName = getModulePath(module)
+          } else {
+            caseObj.moduleName = '-'
+          }
+        } else if (!caseObj.moduleName) {
+          caseObj.moduleName = '-'
+        }
+        return caseObj
+      })
+      selectedCases.value = casesWithModuleName
+      casePagination.total = casesWithModuleName.length
     }
   } catch (error) {
     console.error('Failed to load plan data:', error)
@@ -534,13 +567,42 @@ const handleMoreMenuClick = ({ key }: { key: string }) => {
   }
 }
 
-const handleCasesSelected = (cases: TestCase[]) => {
+const handleCasesSelected = (caseIds: string[], cases: TestCase[]) => {
   // 过滤掉已存在的用例，避免重复添加
   const existingIds = new Set(selectedCases.value.map(c => c.id))
   const newCases = cases.filter(c => !existingIds.has(c.id))
   
+  // 为用例添加模块名称（如果还没有）
+  const casesWithModuleName = newCases.map(c => {
+    const caseObj: any = { ...c }
+    
+    // 如果没有模块名称，从模块ID获取
+    if (!caseObj.moduleName && caseObj.moduleId) {
+      const module = modules.value.find(m => m.id === caseObj.moduleId)
+      if (module) {
+        // 构建模块路径
+        const modulePath = getModulePath(module)
+        caseObj.moduleName = modulePath
+      } else {
+        caseObj.moduleName = '-'
+      }
+    } else if (!caseObj.moduleName) {
+      caseObj.moduleName = '-'
+    }
+    
+    // 确保其他必需字段存在
+    if (!caseObj.priority) {
+      caseObj.priority = 'P2'
+    }
+    if (caseObj.isAutomated === undefined && caseObj.is_automated === undefined) {
+      caseObj.isAutomated = false
+    }
+    
+    return caseObj
+  })
+  
   // 创建新数组以触发响应式更新
-  const updatedCases = [...selectedCases.value, ...newCases]
+  const updatedCases = [...selectedCases.value, ...casesWithModuleName]
   selectedCases.value = updatedCases
   casePagination.total = updatedCases.length
   showCaseSelector.value = false
@@ -548,6 +610,27 @@ const handleCasesSelected = (cases: TestCase[]) => {
   if (newCases.length > 0) {
     message.success(`成功添加 ${newCases.length} 个用例`)
   }
+}
+
+// 获取模块路径的函数
+const getModulePath = (module: any): string => {
+  if (!module) return '-'
+  
+  const pathParts: string[] = [module.name]
+  let currentModule = module
+  
+  // 递归向上查找父模块
+  while (currentModule.parentId) {
+    const parentModule = modules.value.find(m => m.id === currentModule.parentId)
+    if (parentModule) {
+      pathParts.unshift(parentModule.name)
+      currentModule = parentModule
+    } else {
+      break
+    }
+  }
+  
+  return pathParts.join('/')
 }
 
 const handleCaseTableChange = (pag: any) => {
@@ -611,6 +694,12 @@ const handleSubmit = async () => {
     }
 
     message.success(isEditMode.value ? '更新成功' : '创建成功')
+    
+    // 如果是更新模式，重新加载计划数据以获取最新的用例信息
+    if (isEditMode.value && props.planId) {
+      await loadPlanData()
+    }
+    
     emit('save', plan)
   } catch (error: any) {
     console.error('Failed to save plan:', error)
@@ -660,6 +749,8 @@ const formatDuration = (minutes: number) => {
 
 // 生命周期
 onMounted(async () => {
+  // 先加载模块数据，因为加载计划数据时需要用到
+  await loadModules()
   await Promise.all([
     loadEnvironments(),
     loadPlanData(),

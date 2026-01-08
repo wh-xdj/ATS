@@ -182,7 +182,15 @@ class TestPlanService:
         # 添加关联的测试用例
         test_case_ids = plan_data.get("testCaseIds", [])
         if test_case_ids:
-            for idx, case_id in enumerate(test_case_ids):
+            # 过滤掉 None 值和空字符串
+            valid_case_ids = [cid for cid in test_case_ids if cid and str(cid).strip()]
+            for idx, case_id in enumerate(valid_case_ids):
+                # 验证用例是否存在
+                case = db.query(TestCase).filter(TestCase.id == case_id).first()
+                if not case:
+                    logger.warning(f"用例 {case_id} 不存在，跳过添加到计划")
+                    continue
+                
                 relation = PlanCaseRelation(
                     id=str(uuid.uuid4()),
                     plan_id=test_plan.id,
@@ -258,13 +266,22 @@ class TestPlanService:
         if "testCaseIds" in plan_data:
             test_case_ids = plan_data.get("testCaseIds", [])
             
+            # 过滤掉 None 值和空字符串
+            valid_case_ids = [cid for cid in test_case_ids if cid and str(cid).strip()]
+            
             # 删除旧的关联
             db.query(PlanCaseRelation).filter(
                 PlanCaseRelation.plan_id == plan_id
             ).delete(synchronize_session=False)
             
             # 添加新的关联
-            for idx, case_id in enumerate(test_case_ids):
+            for idx, case_id in enumerate(valid_case_ids):
+                # 验证用例是否存在
+                case = db.query(TestCase).filter(TestCase.id == case_id).first()
+                if not case:
+                    logger.warning(f"用例 {case_id} 不存在，跳过添加到计划")
+                    continue
+                
                 relation = PlanCaseRelation(
                     id=str(uuid.uuid4()),
                     plan_id=plan_id,

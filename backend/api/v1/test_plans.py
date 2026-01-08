@@ -254,10 +254,32 @@ async def update_test_plan(
         if not plan:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="测试计划不存在")
 
+        # 序列化计划数据
+        plan_data_response = serialize_model(plan, camel_case=True)
+        
+        # 添加关联的测试用例（与 get_test_plan 保持一致）
+        cases = TestPlanService.get_plan_cases(db, plan_id)
+        plan_data_response["testCases"] = cases
+        plan_data_response["totalCases"] = len(cases)
+        plan_data_response["executedCases"] = sum(
+            1 for case in cases 
+            if case.get("executionStatus") and case.get("executionStatus") != "pending"
+        )
+        plan_data_response["caseStatusCounts"] = {
+            "pending": sum(1 for case in cases if case.get("executionStatus") == "pending" or not case.get("executionStatus")),
+            "pass": sum(1 for case in cases if case.get("executionStatus") == "pass"),
+            "fail": sum(1 for case in cases if case.get("executionStatus") == "fail"),
+            "broken": sum(1 for case in cases if case.get("executionStatus") == "broken"),
+            "error": sum(1 for case in cases if case.get("executionStatus") == "error"),
+            "skip": sum(1 for case in cases if case.get("executionStatus") == "skip")
+        }
+        if "projectId" not in plan_data_response and plan.project_id:
+            plan_data_response["projectId"] = str(plan.project_id)
+
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="更新成功",
-            data=serialize_model(plan, camel_case=True),
+            data=plan_data_response,
         )
     except HTTPException:
         raise

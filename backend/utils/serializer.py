@@ -1,6 +1,6 @@
 """数据序列化工具"""
 from typing import Any, Dict, List
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
 
@@ -44,6 +44,9 @@ def serialize_model(model: Any, camel_case: bool = True) -> Dict[str, Any]:
         
         # 处理datetime类型
         if isinstance(value, datetime):
+            value = value.isoformat()
+        # 处理date类型
+        elif isinstance(value, date):
             value = value.isoformat()
         
         # 转换字段名

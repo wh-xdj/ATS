@@ -390,6 +390,95 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 欢迎提交Issue和Pull Request来改进框架。
 
+## Allure集成
+
+框架已集成Allure测试报告工具，可以生成美观的HTML测试报告。
+
+### 安装Allure
+
+框架已自动安装Allure依赖，但需要安装Allure命令行工具：
+
+```bash
+# macOS
+brew install allure
+
+# Linux (使用npm)
+npm install -g allure-commandline
+
+# Windows (使用Scoop)
+scoop install allure
+```
+
+### 运行测试并生成Allure报告
+
+```bash
+# 运行测试（自动生成allure-results）
+pytest tests/ --alluredir=allure-results
+
+# 生成HTML报告
+allure generate allure-results -o allure-report --clean
+
+# 打开报告（自动启动本地服务器）
+allure open allure-report
+```
+
+### 使用Allure功能
+
+在测试代码中使用Allure功能：
+
+```python
+import pytest
+from framework.utils import step, attach_text, attach_json, severity, label
+
+@pytest.mark.api
+def test_with_allure(test_client):
+    """使用Allure功能的测试示例"""
+    # 设置严重级别
+    severity("critical")
+    
+    # 添加标签
+    label("component", "api")
+    label("team", "backend")
+    
+    # 使用步骤
+    with step("准备测试数据"):
+        data = {"username": "test", "password": "test123"}
+        attach_json(data, "测试数据")
+    
+    with step("发送请求"):
+        response = test_client.post("/api/v1/login", json=data)
+        attach_text(f"响应状态码: {response.status_code}", "响应信息")
+    
+    with step("验证结果"):
+        assert response.status_code == 200
+        result = response.json()
+        attach_json(result, "响应数据")
+```
+
+### Allure配置
+
+在`.env.test`文件中配置Allure：
+
+```env
+# Allure配置
+ALLURE_ENABLED=true
+ALLURE_RESULTS_DIR=allure-results
+ALLURE_REPORT_DIR=allure-report
+```
+
+### Allure工具函数
+
+框架提供了以下Allure工具函数：
+
+- `attach_screenshot(file_path, name)`: 附加截图
+- `attach_text(text, name)`: 附加文本
+- `attach_json(data, name)`: 附加JSON数据
+- `attach_html(html, name)`: 附加HTML
+- `step(step_name)`: 步骤装饰器
+- `label(name, value)`: 添加标签
+- `description(text)`: 添加描述
+- `severity(level)`: 设置严重级别
+
 ## 许可证
 
 MIT License

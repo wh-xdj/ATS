@@ -8,6 +8,9 @@ from framework.hooks.base import (
     SessionStartHook,
     SessionFinishHook,
     CollectionHook,
+    TestSetupHook,
+    TestTeardownHook,
+    TestCallHook,
 )
 
 
@@ -20,11 +23,17 @@ class HookRegistry:
         self._session_start_hooks: List[SessionStartHook] = []
         self._session_finish_hooks: List[SessionFinishHook] = []
         self._collection_hooks: List[CollectionHook] = []
+        self._test_setup_hooks: List[TestSetupHook] = []
+        self._test_teardown_hooks: List[TestTeardownHook] = []
+        self._test_call_hooks: List[TestCallHook] = []
         self._all_hooks: Dict[str, List[BaseHook]] = {
             "config": self._config_hooks,
             "session_start": self._session_start_hooks,
             "session_finish": self._session_finish_hooks,
             "collection": self._collection_hooks,
+            "test_setup": self._test_setup_hooks,
+            "test_teardown": self._test_teardown_hooks,
+            "test_call": self._test_call_hooks,
         }
     
     def register(self, hook: BaseHook) -> None:
@@ -42,6 +51,12 @@ class HookRegistry:
             self._session_finish_hooks.append(hook)
         elif isinstance(hook, CollectionHook):
             self._collection_hooks.append(hook)
+        elif isinstance(hook, TestSetupHook):
+            self._test_setup_hooks.append(hook)
+        elif isinstance(hook, TestTeardownHook):
+            self._test_teardown_hooks.append(hook)
+        elif isinstance(hook, TestCallHook):
+            self._test_call_hooks.append(hook)
         else:
             raise ValueError(f"不支持的Hook类型: {type(hook)}")
     
@@ -72,7 +87,7 @@ class HookRegistry:
         获取指定类型的hooks
         
         Args:
-            hook_type: Hook类型 ("config", "session_start", "session_finish", "collection")
+            hook_type: Hook类型
         
         Returns:
             Hook列表
@@ -99,7 +114,8 @@ class HookRegistry:
                 try:
                     hook.execute(config)
                 except Exception as e:
-                    print(f"[Hook Error] {hook.name} 执行失败: {e}")
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
     
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         """pytest_sessionstart hook入口"""
@@ -108,7 +124,8 @@ class HookRegistry:
                 try:
                     hook.execute(session)
                 except Exception as e:
-                    print(f"[Hook Error] {hook.name} 执行失败: {e}")
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
     
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         """pytest_sessionfinish hook入口"""
@@ -117,7 +134,8 @@ class HookRegistry:
                 try:
                     hook.execute(session)
                 except Exception as e:
-                    print(f"[Hook Error] {hook.name} 执行失败: {e}")
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
     
     def pytest_collection_modifyitems(
         self,
@@ -130,7 +148,38 @@ class HookRegistry:
                 try:
                     hook.execute(config, items)
                 except Exception as e:
-                    print(f"[Hook Error] {hook.name} 执行失败: {e}")
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
+    
+    def pytest_runtest_setup(self, item: pytest.Item) -> None:
+        """pytest_runtest_setup hook入口"""
+        for hook in self._test_setup_hooks:
+            if hook.enabled:
+                try:
+                    hook.execute(item)
+                except Exception as e:
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
+    
+    def pytest_runtest_teardown(self, item: pytest.Item) -> None:
+        """pytest_runtest_teardown hook入口"""
+        for hook in self._test_teardown_hooks:
+            if hook.enabled:
+                try:
+                    hook.execute(item)
+                except Exception as e:
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
+    
+    def pytest_runtest_call(self, item: pytest.Item) -> None:
+        """pytest_runtest_call hook入口"""
+        for hook in self._test_call_hooks:
+            if hook.enabled:
+                try:
+                    hook.execute(item)
+                except Exception as e:
+                    from framework.logger import get_logger
+                    get_logger().error(f"[Hook Error] {hook.name} 执行失败: {e}", exc_info=True)
 
 
 # 全局Hook注册器实例
@@ -143,4 +192,3 @@ def get_hook_registry() -> HookRegistry:
     if _hook_registry is None:
         _hook_registry = HookRegistry()
     return _hook_registry
-

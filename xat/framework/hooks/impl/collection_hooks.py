@@ -3,6 +3,7 @@
 import pytest
 from typing import List
 from framework.hooks.base import CollectionHook
+from framework.logger import get_logger
 
 
 class CollectionModifyItemsHook(CollectionHook):
@@ -17,7 +18,8 @@ class CollectionModifyItemsHook(CollectionHook):
         if not self.enabled:
             return
         
-        print(f"[Hook] {self.name}: 收集到 {len(items)} 个测试项")
+        logger = get_logger()
+        logger.debug(f"[Hook] {self.name}: 收集到 {len(items)} 个测试项")
 
 
 class TestMarkerHook(CollectionHook):
@@ -53,7 +55,8 @@ class TestMarkerHook(CollectionHook):
                         item.add_marker(pytest.mark.asyncio)
         
         if marked_count > 0:
-            print(f"[Hook] {self.name}: 为 {marked_count} 个测试添加了标记")
+            logger = get_logger()
+            logger.debug(f"[Hook] {self.name}: 为 {marked_count} 个测试添加了标记")
 
 
 class TestSorterHook(CollectionHook):
@@ -89,5 +92,6 @@ class TestSorterHook(CollectionHook):
                 str(x.fspath)
             ))
         
-        print(f"[Hook] {self.name}: 按 {self.sort_by} 排序了 {len(items)} 个测试")
+        logger = get_logger()
+        logger.debug(f"[Hook] {self.name}: 按 {self.sort_by} 排序了 {len(items)} 个测试")
 

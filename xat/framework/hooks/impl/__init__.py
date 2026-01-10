@@ -15,6 +15,17 @@ from .collection_hooks import (
     TestMarkerHook,
     TestSorterHook,
 )
+from .test_hooks import (
+    TestSetupLogHook,
+    TestTeardownLogHook,
+    TestReportHook,
+)
+from .allure_hooks import (
+    AllureConfigHook,
+    AllureTestSetupHook,
+    AllureTestTeardownHook,
+    AllureReportHook,
+)
 
 __all__ = [
     "PytestConfigureHook",
@@ -26,5 +37,11 @@ __all__ = [
     "CollectionModifyItemsHook",
     "TestMarkerHook",
     "TestSorterHook",
+    "TestSetupLogHook",
+    "TestTeardownLogHook",
+    "TestReportHook",
+    "AllureConfigHook",
+    "AllureTestSetupHook",
+    "AllureTestTeardownHook",
+    "AllureReportHook",
 ]
-

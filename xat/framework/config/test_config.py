@@ -29,12 +29,19 @@ class TestConfig(BaseSettings):
     TEST_CLIENT_BASE_URL: str = "http://testserver"
     
     # 日志配置
-    TEST_LOG_LEVEL: str = "DEBUG"
-    TEST_LOG_TO_FILE: bool = False
+    TEST_LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    TEST_LOG_TO_FILE: bool = True  # 是否输出到文件
+    TEST_LOG_FILE_DIR: str = "logs"  # 日志文件目录
+    TEST_LOG_FILE_PREFIX: str = "test"  # 日志文件前缀
     
     # 覆盖率配置
     COVERAGE_ENABLED: bool = True
     COVERAGE_FAIL_UNDER: int = 80
+    
+    # Allure配置
+    ALLURE_ENABLED: bool = True
+    ALLURE_RESULTS_DIR: str = "allure-results"
+    ALLURE_REPORT_DIR: str = "allure-report"
     
     class Config:
         env_file = ".env.test"

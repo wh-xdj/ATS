@@ -18,7 +18,7 @@ Desktop.ini
 # IDE / 编辑器
 # ==================
 .vscode/
-.idea/
+../.idea/
 *.swp
 *.swo
 *~
@@ -124,4 +124,6 @@ coverage/
 htmlcov/
 .coverage
 *.cover
+.comate
+.venv
 

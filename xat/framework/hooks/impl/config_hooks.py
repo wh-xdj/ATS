@@ -4,6 +4,7 @@ import pytest
 from typing import Optional
 from framework.hooks.base import ConfigHook
 from framework.config import get_test_config
+from framework.logger import get_logger
 
 
 class PytestConfigureHook(ConfigHook):
@@ -14,13 +15,14 @@ class PytestConfigureHook(ConfigHook):
         if not self.enabled:
             return
         
+        logger = get_logger()
         test_config = get_test_config()
         
         # 设置pytest选项
         if not hasattr(config.option, 'asyncio_mode'):
             config.option.asyncio_mode = "auto"
         
-        print(f"[Hook] {self.name}: Pytest配置完成")
+        logger.log_hook_execution(self.name, "执行完成")
 
 
 class MarkerRegistrationHook(ConfigHook):
@@ -53,10 +55,12 @@ class MarkerRegistrationHook(ConfigHook):
         if not self.enabled:
             return
         
+        logger = get_logger()
+        
         for marker_name, description in self.markers.items():
             config.addinivalue_line("markers", f"{marker_name}: {description}")
         
-        print(f"[Hook] {self.name}: 注册了 {len(self.markers)} 个自定义标记")
+        logger.log_hook_execution(self.name, f"注册了 {len(self.markers)} 个自定义标记")
 
 
 class AsyncioConfigHook(ConfigHook):
@@ -67,8 +71,9 @@ class AsyncioConfigHook(ConfigHook):
         if not self.enabled:
             return
         
+        logger = get_logger()
+        
         # 设置asyncio模式
         config.option.asyncio_mode = "auto"
         
-        print(f"[Hook] {self.name}: Asyncio配置完成")
-
+        logger.log_hook_execution(self.name, "配置完成")

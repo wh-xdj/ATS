@@ -106,3 +106,55 @@ class CollectionHook(BaseHook):
         """
         pass
 
+
+class TestHook(BaseHook):
+    """测试用例类Hook基类"""
+    
+    @abstractmethod
+    def execute(self, item: pytest.Item) -> None:
+        """
+        执行测试hook
+        
+        Args:
+            item: 测试项对象
+        """
+        pass
+
+
+class TestSetupHook(TestHook):
+    """测试用例开始Hook - pytest_runtest_setup"""
+    
+    @property
+    def hook_name(self) -> str:
+        return "pytest_runtest_setup"
+    
+    @abstractmethod
+    def execute(self, item: pytest.Item) -> None:
+        """执行测试开始hook"""
+        pass
+
+
+class TestTeardownHook(TestHook):
+    """测试用例结束Hook - pytest_runtest_teardown"""
+    
+    @property
+    def hook_name(self) -> str:
+        return "pytest_runtest_teardown"
+    
+    @abstractmethod
+    def execute(self, item: pytest.Item) -> None:
+        """执行测试结束hook"""
+        pass
+
+
+class TestCallHook(TestHook):
+    """测试用例调用Hook - pytest_runtest_call"""
+    
+    @property
+    def hook_name(self) -> str:
+        return "pytest_runtest_call"
+    
+    @abstractmethod
+    def execute(self, item: pytest.Item) -> None:
+        """执行测试调用hook"""
+        pass

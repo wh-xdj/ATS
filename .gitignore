@@ -126,4 +126,4 @@ htmlcov/
 *.cover
 .comate
 .venv
-
+.idea

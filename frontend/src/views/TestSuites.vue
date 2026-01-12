@@ -873,9 +873,10 @@ const loadSuiteLogs = async (suiteId: string) => {
   executionLogLoading.value = true
   try {
     // 从API获取历史日志
+    // 增加limit值以避免日志记录被截断，如果日志很多可以后续实现分页加载
     const response = await testSuiteApi.getSuiteLogs(suiteId, {
       skip: 0,
-      limit: 1000
+      limit: 10000  // 增加到10000，避免日志记录被截断
     })
     
     const logs = response.items || []

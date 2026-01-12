@@ -16,7 +16,7 @@
     </a-page-header>
 
     <div class="log-container">
-      <a-spin :spinning="loading">
+      <a-spin :spinning="loading" class="log-spin">
         <div class="log-content" ref="logContentRef">
           <div v-if="suiteLogs.length > 0">
             <div
@@ -81,22 +81,22 @@ const loadSuiteLogs = async () => {
       skip: 0,
       limit: 1000
     }
-    
+
     if (logId.value) {
       params.logId = logId.value
     } else if (executionId.value) {
       params.executionId = executionId.value
     }
-    
+
     const response = await testSuiteApi.getSuiteLogs(suiteId.value, params)
-    
+
     const logs = response.items || []
     suiteLogs.value = logs.map((log: any) => ({
       message: log.message || '',
       timestamp: log.timestamp || log.createdAt,
       execution_id: log.execution_id || executionId.value
     }))
-    
+
     // 滚动到底部
     await nextTick()
     if (logContentRef.value) {
@@ -250,23 +250,47 @@ onUnmounted(() => {
 
 <style scoped>
 .execution-log-page {
-  height: 100%;
+  /* 使用calc计算高度：100vh - layout-header(64px) - layout-content上下padding(48px) */
+  height: calc(100vh - 64px - 48px);
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
+  overflow: hidden; /* 防止页面整体滚动 */
+}
+
+/* a-page-header 通常高度约为 64px，但我们需要让它自适应 */
+.execution-log-page :deep(.ant-page-header) {
+  flex-shrink: 0; /* 防止header被压缩 */
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .log-container {
   flex: 1;
   padding: 16px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.log-spin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.log-spin :deep(.ant-spin-container) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .log-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #1e1e1e;
   color: #d4d4d4;
   padding: 12px;
@@ -274,6 +298,28 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1.6;
   border-radius: 4px;
+  /* 确保滚动条可见 */
+  scrollbar-width: thin;
+  scrollbar-color: #555 #1e1e1e;
+}
+
+/* Webkit浏览器滚动条样式 */
+.log-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+
+.log-content::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.log-content::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 
 .log-entry {

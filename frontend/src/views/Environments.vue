@@ -1353,7 +1353,7 @@ const viewExecutionLogs = async (record: any) => {
       const response = await testSuiteApi.getSuiteLogs(record.suiteId, {
         executionId: record.executionId,
         skip: 0,
-        limit: 1000
+        limit: 10000  // 增加到10000，避免日志记录被截断
       })
       const logs = response.items || []
       if (logs.length > 0) {

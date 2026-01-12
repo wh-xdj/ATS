@@ -4,7 +4,15 @@ import pytest
 from framework.utils import assert_response_success, assert_response_error
 
 
-@pytest.mark.api
-def test_example_with_async_client():
-    """使用异步客户端测试API"""
-    assert True
+class TestDemo:
+    def test_caseid_853873(self):
+        """测试用例1"""
+        assert True
+
+    def test_caseid_144943(self):
+        """测试用例2"""
+        assert False
+
+    def test_caseid_144163(self):
+        """测试用例3"""
+        assert Exception("测试用例3异常")

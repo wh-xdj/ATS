@@ -14,11 +14,13 @@ from .collection_hooks import (
     CollectionModifyItemsHook,
     TestMarkerHook,
     TestSorterHook,
+    TestCaseFilterHook,
 )
 from .test_hooks import (
     TestSetupLogHook,
     TestTeardownLogHook,
     TestReportHook,
+    TestResultCollectorHook,
 )
 from .allure_hooks import (
     AllureConfigHook,
@@ -37,9 +39,11 @@ __all__ = [
     "CollectionModifyItemsHook",
     "TestMarkerHook",
     "TestSorterHook",
+    "TestCaseFilterHook",
     "TestSetupLogHook",
     "TestTeardownLogHook",
     "TestReportHook",
+    "TestResultCollectorHook",
     "AllureConfigHook",
     "AllureTestSetupHook",
     "AllureTestTeardownHook",

@@ -11,9 +11,11 @@ from framework.hooks.impl import (
     CollectionModifyItemsHook,
     TestMarkerHook,
     TestSorterHook,
+    TestCaseFilterHook,
     TestSetupLogHook,
     TestTeardownLogHook,
     TestReportHook,
+    TestResultCollectorHook,
     AllureConfigHook,
     AllureTestSetupHook,
     AllureTestTeardownHook,
@@ -49,13 +51,16 @@ def setup_hooks() -> HookRegistry:
     registry.register(CollectionModifyItemsHook())
     registry.register(TestMarkerHook())
     registry.register(TestSorterHook(sort_by="marker"))
+    registry.register(TestCaseFilterHook())  # 用例筛选Hook，放在最后确保筛选在最后执行
     
     # 注册测试用例类hooks（需要保持引用以便传递）
     test_setup_hook = TestSetupLogHook()
     test_teardown_hook = TestTeardownLogHook(setup_hook=test_setup_hook)
+    test_result_collector = TestResultCollectorHook()  # 结果收集Hook
     
     registry.register(test_setup_hook)
     registry.register(test_teardown_hook)
+    registry.register(test_result_collector)  # 注册结果收集Hook
     registry.register(AllureTestSetupHook())
     registry.register(AllureTestTeardownHook())
     
@@ -115,9 +120,14 @@ def pytest_runtest_logreport(report):
         error = ""
         
         if report.outcome == "failed" and hasattr(report, 'longrepr'):
-            error = str(report.longrepr)[:500]  # 限制错误信息长度
+            error = str(report.longrepr)[:1000]  # 限制错误信息长度
         
         logger.log_test_end(test_name, status, duration, error)
+        
+        # 调用结果收集Hook（立即写入文件）
+        for hook in _hook_registry.get_hooks("test"):
+            if hasattr(hook, 'log_test_result'):
+                hook.log_test_result(test_name, status, duration, error)
 
 
 __all__ = [

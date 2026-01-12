@@ -229,6 +229,11 @@ async def execute_test_suite(
             suite.updated_at = beijing_now()
             db.commit()
             
+            # 根据case_ids查询对应的case_code（用于用例筛选）
+            from models.test_case import TestCase
+            test_cases = db.query(TestCase).filter(TestCase.id.in_(suite.case_ids)).all()
+            case_codes = [case.case_code for case in test_cases]
+            
             # 构建执行任务消息
             # 只有当git_enabled为'true'时才使用git配置
             git_enabled = suite.git_enabled == 'true' if hasattr(suite, 'git_enabled') and suite.git_enabled else False
@@ -242,7 +247,8 @@ async def execute_test_suite(
                 "git_branch": (suite.git_branch or None) if git_enabled else None,
                 "git_token": (suite.git_token or None) if git_enabled else None,
                 "execution_command": suite.execution_command,
-                "case_ids": suite.case_ids,
+                "case_ids": suite.case_ids,  # 保留用于结果回填
+                "case_codes": case_codes,  # 新增：用于用例筛选
                 "executor_id": str(current_user.id)
             }
             
@@ -397,6 +403,12 @@ async def cancel_test_suite(
                             next_suite.status = "running"
                         
                         git_enabled = next_suite.git_enabled == 'true' if hasattr(next_suite, 'git_enabled') and next_suite.git_enabled else False
+                        
+                        # 根据case_ids查询对应的case_code
+                        from models.test_case import TestCase
+                        next_test_cases = db.query(TestCase).filter(TestCase.id.in_(next_suite.case_ids)).all()
+                        next_case_codes = [case.case_code for case in next_test_cases]
+                        
                         task_message = {
                             "type": "execute_test_suite",
                             "suite_id": next_suite.id,
@@ -407,6 +419,7 @@ async def cancel_test_suite(
                             "git_token": (next_suite.git_token or None) if git_enabled else None,
                             "execution_command": next_suite.execution_command,
                             "case_ids": next_suite.case_ids,
+                            "case_codes": next_case_codes,  # 新增：用于用例筛选
                             "executor_id": next_task.executor_id
                         }
                         await manager.send_message(suite.environment_id, task_message)

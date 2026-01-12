@@ -22,8 +22,43 @@ import asyncio
 if settings.ENVIRONMENT == "development":
     try:
         Base.metadata.create_all(bind=engine)
+        logger.info("数据库连接成功，表结构已创建/验证")
     except Exception as e:
+        error_msg = str(e)
         logger.warning(f"警告: 无法连接到数据库，跳过自动创建表: {e}")
+        
+        # 提供更详细的错误信息和解决方案
+        if "1045" in error_msg or "Access denied" in error_msg:
+            logger.warning("=" * 60)
+            logger.warning("数据库访问被拒绝 (1045) - 常见原因和解决方案：")
+            logger.warning("")
+            logger.warning("如果使用 Docker MySQL:")
+            logger.warning("  1. 确保容器运行: docker ps | grep ats-mysql")
+            logger.warning("  2. 运行修复脚本: ./fix-mysql-permissions.sh")
+            logger.warning("  3. 或手动修复: docker exec -it ats-mysql mysql -uroot -proot_password")
+            logger.warning("     然后执行: CREATE USER IF NOT EXISTS 'ats_user'@'localhost' IDENTIFIED BY 'ats_password';")
+            logger.warning("              GRANT ALL PRIVILEGES ON ats_db.* TO 'ats_user'@'localhost';")
+            logger.warning("              FLUSH PRIVILEGES;")
+            logger.warning("")
+            logger.warning("如果使用本地 MySQL:")
+            logger.warning("  1. 确保 MySQL 服务运行")
+            logger.warning("  2. 创建用户和数据库（参考 SETUP_DATABASE.md）")
+            logger.warning("")
+            logger.warning("运行诊断脚本: ./check-database.sh")
+            logger.warning("=" * 60)
+        elif "2003" in error_msg or "Can't connect" in error_msg:
+            logger.warning("=" * 60)
+            logger.warning("无法连接到 MySQL 服务器 - 可能原因：")
+            logger.warning("  1. MySQL 服务未启动")
+            logger.warning("  2. Docker 容器未运行（如果使用 Docker）")
+            logger.warning("  3. 端口 3306 被占用或配置错误")
+            logger.warning("")
+            logger.warning("解决方案:")
+            logger.warning("  - Docker: docker-compose up -d")
+            logger.warning("  - 本地: 启动 MySQL 服务")
+            logger.warning("  - 运行诊断: ./check-database.sh")
+            logger.warning("=" * 60)
+        
         logger.warning("请确保 MySQL 服务已启动，或稍后使用 alembic 进行数据库迁移")
 
 # 创建FastAPI应用

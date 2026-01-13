@@ -125,7 +125,8 @@ def pytest_runtest_logreport(report):
         logger.log_test_end(test_name, status, duration, error)
         
         # 调用结果收集Hook（立即写入文件）
-        for hook in _hook_registry.get_hooks("test"):
+        # TestResultCollectorHook继承自TestTeardownHook，所以从test_teardown hooks中获取
+        for hook in _hook_registry.get_hooks("test_teardown"):
             if hasattr(hook, 'log_test_result'):
                 hook.log_test_result(test_name, status, duration, error)
 

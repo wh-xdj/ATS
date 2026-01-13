@@ -96,7 +96,7 @@ class TestReportHook(TestTeardownHook):
 
 
 class TestResultCollectorHook(TestReportHook):
-    """测试结果收集Hook - 增量收集测试结果并写入JSON Lines文件"""
+    """测试结果收集Hook - 增量收集测试结果并写入JSON文件"""
     
     def __init__(self):
         super().__init__()
@@ -132,17 +132,17 @@ class TestResultCollectorHook(TestReportHook):
                     logger.warning(f"[Hook] {self.name}: 读取用例映射失败: {e}")
     
     def _init_result_file(self):
-        """初始化结果文件（清空或创建）"""
+        """初始化结果文件（创建空JSON数组）"""
         possible_paths = [
-            Path("test_results.jsonl"),
-            Path(__file__).parent.parent.parent / "test_results.jsonl",
+            Path("test_results.json"),
+            Path(__file__).parent.parent.parent / "test_results.json",
         ]
         
         for result_file in possible_paths:
             try:
-                # 清空文件（如果存在）或创建新文件
+                # 创建空JSON数组文件
                 with open(result_file, 'w', encoding='utf-8') as f:
-                    pass  # 创建空文件
+                    json.dump([], f, ensure_ascii=False, indent=2)
                 self._result_file = result_file
                 logger = get_logger()
                 logger.debug(f"[Hook] {self.name}: 初始化结果文件: {result_file}")
@@ -201,16 +201,29 @@ class TestResultCollectorHook(TestReportHook):
         self._append_result_to_file(result_data)
     
     def _append_result_to_file(self, result_data: dict):
-        """将结果追加到JSON Lines文件"""
+        """将结果追加到JSON数组文件"""
         if not self._result_file:
             return
         
         try:
             with self._file_lock:
-                with open(self._result_file, 'a', encoding='utf-8') as f:
-                    # 写入JSON Lines格式（每行一个JSON对象）
-                    json_line = json.dumps(result_data, ensure_ascii=False)
-                    f.write(json_line + '\n')
+                # 读取现有结果数组
+                results = []
+                if self._result_file.exists():
+                    try:
+                        with open(self._result_file, 'r', encoding='utf-8') as f:
+                            results = json.load(f)
+                            if not isinstance(results, list):
+                                results = []
+                    except (json.JSONDecodeError, IOError):
+                        results = []
+                
+                # 追加新结果
+                results.append(result_data)
+                
+                # 写回整个数组
+                with open(self._result_file, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
                     f.flush()  # 立即刷新到磁盘
             
             logger = get_logger()

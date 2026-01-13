@@ -146,11 +146,16 @@ class WebSocketClient:
         
         try:
             message_str = json.dumps(message, ensure_ascii=False)
+            message_type = message.get("type", "unknown")
+            if self.logger:
+                self.logger.debug(f"[WebSocket] 发送消息: type={message_type}, message_size={len(message_str)}")
             await self.websocket.send(message_str)
+            if self.logger and message_type == "test_suite_result":
+                self.logger.info(f"[WebSocket] 成功发送test_suite_result消息: suite_id={message.get('suite_id')}, case_id={message.get('case_id')}, result={message.get('result')}")
             return True
         except Exception as e:
             if self.logger:
-                self.logger.error(f"发送消息失败: {e}")
+                self.logger.error(f"发送消息失败: {e}, message_type={message.get('type', 'unknown')}")
             self.connected = False
             return False
     

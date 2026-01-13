@@ -697,7 +697,6 @@ class Agent:
                 lines = message.split('\n')
                 formatted_lines = [f"{timestamp_prefix} {line}" for line in lines]
                 formatted_message = '\n'.join(formatted_lines)
-                print(formatted_message)
 
                 await self.ws_client.send_message({
                     "type": "test_suite_log",
@@ -816,7 +815,7 @@ class Agent:
 
             # 生成用例筛选JSON文件
             import json
-            test_cases_file = xat_root_dir / "test_cases.json"
+            test_cases_file = xat_root_dir / "xat" / "test_cases.json"
 
             if case_codes:
                 test_cases_data = {
@@ -847,9 +846,14 @@ class Agent:
                 case_code_to_id = {
                     str(code): str(cid) for code, cid in zip(case_codes, case_ids)
                 }
+                if self.logger:
+                    self.logger.info(f"创建case_code映射: {len(case_code_to_id)} 个用例")
+            else:
+                if self.logger:
+                    self.logger.warning(f"case_codes和case_ids长度不匹配: case_codes={len(case_codes) if case_codes else 0}, case_ids={len(case_ids) if case_ids else 0}")
 
             # 结果文件路径
-            test_results_file = xat_root_dir / "test_results.jsonl"
+            test_results_file = xat_root_dir / "xat" / "test_results.json"
 
             # 已上报的结果集合（避免重复上报）
             reported_results = set()
@@ -860,7 +864,6 @@ class Agent:
                 if not self.ws_client:
                     return
 
-                last_size = 0
                 wait_interval = 0.5  # 检查间隔（秒）
 
                 while suite_id in self.running_suites:
@@ -869,81 +872,75 @@ class Agent:
                             await asyncio.sleep(wait_interval)
                             continue
 
-                        # 检查文件大小变化
-                        current_size = test_results_file.stat().st_size
+                        # 读取整个JSON数组
+                        try:
+                            with open(test_results_file, 'r', encoding='utf-8') as f:
+                                results = json.load(f)
+                                if not isinstance(results, list):
+                                    results = []
 
-                        if current_size > last_size:
-                            # 文件有新内容，读取新增部分
-                            try:
-                                with open(test_results_file, 'r', encoding='utf-8') as f:
-                                    # 跳过已读取的部分
-                                    if last_size > 0:
-                                        f.seek(last_size)
+                            # 处理新增的结果
+                            for result_data in results:
+                                test_name = result_data.get("test_name")
 
-                                    # 读取新行
-                                    new_lines = f.readlines()
+                                # 检查是否已上报（避免重复）
+                                if test_name in reported_results:
+                                    continue
 
-                                    for line in new_lines:
-                                        line = line.strip()
-                                        if not line:
-                                            continue
+                                # 获取case_id
+                                case_id = result_data.get("case_id")
+                                if not case_id:
+                                    # 尝试通过case_code查找
+                                    case_code = result_data.get("case_code")
+                                    if case_code:
+                                        case_id = case_code_to_id.get(case_code)
+                                        if not case_id and self.logger:
+                                            self.logger.warning(f"未找到case_code对应的case_id: case_code={case_code}, 可用映射: {list(case_code_to_id.keys())[:5]}")
+                                else:
+                                    if self.logger:
+                                        self.logger.debug(f"从结果数据中获取到case_id: {case_id}")
 
-                                        try:
-                                            result_data = json.loads(line)
-                                            test_name = result_data.get("test_name")
+                                if case_id:
+                                    status = result_data.get("status", "error")
+                                    duration = result_data.get("duration", 0.0)
+                                    error_message = result_data.get("error")
 
-                                            # 检查是否已上报（避免重复）
-                                            if test_name in reported_results:
-                                                continue
+                                    # 转换duration格式
+                                    if isinstance(duration, (int, float)):
+                                        duration_str = f"{duration:.2f}s"
+                                    else:
+                                        duration_str = str(duration) if duration else None
 
-                                            # 获取case_id
-                                            case_id = result_data.get("case_id")
-                                            if not case_id:
-                                                # 尝试通过case_code查找
-                                                case_code = result_data.get("case_code")
-                                                if case_code:
-                                                    case_id = case_code_to_id.get(case_code)
+                                    # 上报结果
+                                    send_success = await self.ws_client.send_message({
+                                        "type": "test_suite_result",
+                                        "suite_id": suite_id,
+                                        "case_id": case_id,
+                                        "result": status,
+                                        "duration": duration_str,
+                                        "log_output": "",  # 实时上报时可能还没有完整日志
+                                        "error_message": error_message,
+                                        "executor_id": executor_id
+                                    })
 
-                                            if case_id:
-                                                status = result_data.get("status", "error")
-                                                duration = result_data.get("duration", 0.0)
-                                                error_message = result_data.get("error")
+                                    if send_success:
+                                        # 标记为已上报
+                                        reported_results.add(test_name)
+                                        if self.logger:
+                                            self.logger.info(f"实时上报用例结果成功: case_id={case_id}, status={status}, test_name={test_name}")
+                                    else:
+                                        if self.logger:
+                                            self.logger.error(f"实时上报用例结果失败: case_id={case_id}, status={status}, test_name={test_name}, WebSocket可能未连接")
+                                else:
+                                    if self.logger:
+                                        self.logger.warning(f"跳过上报结果（未找到case_id）: test_name={test_name}, case_code={result_data.get('case_code')}, case_id={result_data.get('case_id')}")
 
-                                                # 转换duration格式
-                                                if isinstance(duration, (int, float)):
-                                                    duration_str = f"{duration:.2f}s"
-                                                else:
-                                                    duration_str = str(duration) if duration else None
-
-                                                # 上报结果
-                                                await self.ws_client.send_message({
-                                                    "type": "test_suite_result",
-                                                    "suite_id": suite_id,
-                                                    "case_id": case_id,
-                                                    "result": status,
-                                                    "duration": duration_str,
-                                                    "log_output": "",  # 实时上报时可能还没有完整日志
-                                                    "error_message": error_message,
-                                                    "executor_id": executor_id
-                                                })
-
-                                                # 标记为已上报
-                                                reported_results.add(test_name)
-
-                                                if self.logger:
-                                                    self.logger.info(f"实时上报用例结果: case_id={case_id}, status={status}")
-
-                                        except json.JSONDecodeError as e:
-                                            if self.logger:
-                                                self.logger.warning(f"解析结果行失败: {line[:100]}, 错误: {e}")
-                                            continue
-
-                                    # 更新已读取位置
-                                    last_size = current_size
-
-                            except Exception as e:
-                                if self.logger:
-                                    self.logger.error(f"读取结果文件失败: {e}")
+                        except json.JSONDecodeError as e:
+                            if self.logger:
+                                self.logger.warning(f"解析结果文件失败: {e}")
+                        except Exception as e:
+                            if self.logger:
+                                self.logger.error(f"读取结果文件失败: {e}")
 
                         # 等待一段时间后再次检查
                         await asyncio.sleep(wait_interval)
@@ -1127,51 +1124,57 @@ class Agent:
 
             # 最后检查是否有遗漏的结果
             if test_results_file.exists():
+                self.logger.info(f"test_results_file path is {test_results_file}")
                 try:
                     with open(test_results_file, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line:
+                        results = json.load(f)
+                        if not isinstance(results, list):
+                            results = []
+
+                        for result_data in results:
+                            test_name = result_data.get("test_name")
+
+                            if test_name in reported_results:
                                 continue
 
-                            try:
-                                result_data = json.loads(line)
-                                test_name = result_data.get("test_name")
+                            case_id = result_data.get("case_id")
+                            if not case_id:
+                                case_code = result_data.get("case_code")
+                                if case_code:
+                                    case_id = case_code_to_id.get(case_code)
 
-                                if test_name in reported_results:
-                                    continue
+                            if case_id:
+                                status = result_data.get("status", "error")
+                                duration_val = result_data.get("duration", 0.0)
+                                error_message = result_data.get("error")
 
-                                case_id = result_data.get("case_id")
-                                if not case_id:
-                                    case_code = result_data.get("case_code")
-                                    if case_code:
-                                        case_id = case_code_to_id.get(case_code)
+                                if isinstance(duration_val, (int, float)):
+                                    duration_str = f"{duration_val:.2f}s"
+                                else:
+                                    duration_str = str(duration_val) if duration_val else None
 
-                                if case_id:
-                                    status = result_data.get("status", "error")
-                                    duration_val = result_data.get("duration", 0.0)
-                                    error_message = result_data.get("error")
+                                send_success = await self.ws_client.send_message({
+                                    "type": "test_suite_result",
+                                    "suite_id": suite_id,
+                                    "case_id": case_id,
+                                    "result": status,
+                                    "duration": duration_str,
+                                    "log_output": log_output,
+                                    "error_message": error_message,
+                                    "executor_id": executor_id
+                                })
 
-                                    if isinstance(duration_val, (int, float)):
-                                        duration_str = f"{duration_val:.2f}s"
-                                    else:
-                                        duration_str = str(duration_val) if duration_val else None
-
-                                    await self.ws_client.send_message({
-                                        "type": "test_suite_result",
-                                        "suite_id": suite_id,
-                                        "case_id": case_id,
-                                        "result": status,
-                                        "duration": duration_str,
-                                        "log_output": log_output,
-                                        "error_message": error_message,
-                                        "executor_id": executor_id
-                                    })
-
+                                if send_success:
                                     reported_results.add(test_name)
+                                    if self.logger:
+                                        self.logger.info(f"最后检查上报用例结果成功: case_id={case_id}, status={status}, test_name={test_name}")
+                                else:
+                                    if self.logger:
+                                        self.logger.error(f"最后检查上报用例结果失败: case_id={case_id}, status={status}, test_name={test_name}, WebSocket可能未连接")
 
-                            except json.JSONDecodeError:
-                                continue
+                except json.JSONDecodeError as e:
+                    if self.logger:
+                        self.logger.warning(f"解析结果文件失败: {e}")
                 except Exception as e:
                     if self.logger:
                         self.logger.error(f"最后检查结果文件失败: {e}")

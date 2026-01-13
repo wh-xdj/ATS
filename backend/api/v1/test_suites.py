@@ -555,20 +555,28 @@ async def get_suite_logs(
     """获取测试套日志"""
     from models.test_suite import TestSuiteLog
     from utils.serializer import serialize_model
-    print(f"log_id: {log_id}, execution_id: {execution_id}")
+    from core.logger import logger
+    
+    logger.info(f"[API] 获取测试套日志: suite_id={suite_id}, log_id={log_id}, execution_id={execution_id}, skip={skip}, limit={limit}")
     try:
         query = db.query(TestSuiteLog).filter(TestSuiteLog.suite_id == suite_id)
         
         if log_id:
             # 优先使用log_id查询
+            logger.info(f"[API] 使用log_id查询: {log_id}")
             query = query.filter(TestSuiteLog.id == log_id)
         elif execution_id:
+            # 使用execution_id查询
+            logger.info(f"[API] 使用execution_id查询: {execution_id}")
             query = query.filter(TestSuiteLog.execution_id == execution_id)
+        else:
+            # 如果没有指定log_id或execution_id，查询所有日志
+            logger.info(f"[API] 查询所有日志（未指定log_id或execution_id）")
         
         total = query.count()
+        logger.info(f"[API] 查询到 {total} 条日志记录")
         items = query.order_by(TestSuiteLog.timestamp.asc()).offset(skip).limit(limit).all()
-        print(f"items: {items}")
-        # logger.info(f"items: {items}")
+        logger.info(f"[API] 返回 {len(items)} 条日志记录")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -664,6 +672,10 @@ async def get_suite_suite_executions(
         # 获取每次执行的详细信息
         items = []
         for execution_id_val, first_timestamp in unique_execution_ids:
+            # 初始化状态变量（确保始终定义）
+            is_running = False
+            is_pending = False
+            
             # 获取这次执行的所有日志记录（每个execution_id只有一条记录）
             log_record = db.query(TestSuiteLog).filter(
                 TestSuiteLog.execution_id == execution_id_val
@@ -800,9 +812,7 @@ async def get_suite_suite_executions(
                 TaskQueue.suite_id == suite_id
             ).first()
             
-            # 检查是否正在执行中
-            is_running = False
-            is_pending = False
+            # 检查是否正在执行中（更新状态变量）
             if task:
                 if task.status == "running":
                     is_running = True
@@ -958,6 +968,7 @@ async def delete_suite_execution(
 ):
     """删除测试套执行历史"""
     from models.test_suite import TestSuite, TestSuiteLog, TestSuiteExecution
+    from datetime import timedelta
     
     try:
         # 验证测试套存在

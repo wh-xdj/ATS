@@ -32,9 +32,11 @@
       </template>
     </a-page-header>
 
-    <div class="content-wrapper">
-      <!-- 筛选和搜索区域 -->
-      <a-card class="filter-card" size="small">
+    <!-- 固定顶部工具栏和筛选区域 -->
+    <div class="fixed-header">
+      <div class="content-wrapper">
+        <!-- 筛选和搜索区域 -->
+        <a-card class="filter-card" size="small">
         <a-row :gutter="16" align="middle">
           <a-col :span="6">
             <a-input-search
@@ -90,14 +92,18 @@
           </a-col>
         </a-row>
       </a-card>
+      </div>
+    </div>
 
+    <!-- 可滚动内容区域 -->
+    <div class="scrollable-content">
       <!-- 计划列表 -->
       <a-card class="plans-card">
         <a-table
           :columns="columns"
           :data-source="plans"
           :loading="loading"
-          :pagination="pagination"
+          :pagination="false"
           :row-key="record => record.id"
           :scroll="{ x: 1200 }"
           @change="handleTableChange"
@@ -532,6 +538,12 @@ const handleTableChange = (paginationConfig: any) => {
   loadPlans()
 }
 
+const handlePaginationChange = (page: number, pageSize: number) => {
+  pagination.value.current = page
+  pagination.value.pageSize = pageSize
+  loadPlans()
+}
+
 const createPlan = () => {
   isEditMode.value = false
   editingPlanId.value = null
@@ -896,22 +908,54 @@ defineExpose({
 
 <style scoped>
 .test-plans-container {
-  height: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: #f5f5f5;
+  overflow: hidden;
+}
+
+/* 固定顶部工具栏和筛选区域 */
+.fixed-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #f5f5f5;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
 }
 
 .content-wrapper {
   padding: 16px;
-  height: calc(100vh - 120px);
-  overflow: auto;
 }
 
 .filter-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+
+/* 可滚动内容区域 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .plans-card {
-  height: calc(100% - 80px);
+  margin: 0;
+}
+
+/* 固定底部分页器 */
+.fixed-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .plan-name-link {

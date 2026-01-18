@@ -1,54 +1,57 @@
 <template>
   <div class="projects-container">
-    <!-- 项目列表 -->
-    <div class="projects-content">
-        <div class="content-header">
+    <!-- 固定顶部工具栏 -->
+    <div class="fixed-header">
+      <div class="content-header">
         <a-button type="primary" @click="showCreateModal">
           <template #icon><PlusOutlined /></template>
-            添加项目
+          添加项目
         </a-button>
 
-          <a-space>
-            <a-select
-              v-model:value="statusFilter"
-              placeholder="项目状态"
-              style="width: 120px"
-              allow-clear
-              @change="handleFilterChange"
-            >
-              <a-select-option value="active">活跃</a-select-option>
-              <a-select-option value="archived">已归档</a-select-option>
-              <a-select-option value="suspended">已暂停</a-select-option>
-            </a-select>
-            <a-input-search
-              v-model:value="searchValue"
-              placeholder="输入名称搜索"
-              style="width: 200px"
-              @search="handleSearch"
-              allow-clear
-            />
-            <a-button-group>
-              <a-button :type="viewLayout === 'list' ? 'primary' : 'default'" @click="viewLayout = 'list'">
-                <template #icon><UnorderedListOutlined /></template>
-              </a-button>
-              <a-button :type="viewLayout === 'grid' ? 'primary' : 'default'" @click="viewLayout = 'grid'">
-                <template #icon><AppstoreOutlined /></template>
-            </a-button>
-            </a-button-group>
-          </a-space>
-      </div>
-
-        <a-card class="table-card">
-          <a-table
-            :columns="columns"
-            :data-source="filteredProjects"
-            :loading="loading"
-            :row-selection="rowSelection"
-            :pagination="pagination"
-            :row-key="record => record.id"
-            @change="handleTableChange"
-            size="middle"
+        <a-space>
+          <a-select
+            v-model:value="statusFilter"
+            placeholder="项目状态"
+            style="width: 120px"
+            allow-clear
+            @change="handleFilterChange"
           >
+            <a-select-option value="active">活跃</a-select-option>
+            <a-select-option value="archived">已归档</a-select-option>
+            <a-select-option value="suspended">已暂停</a-select-option>
+          </a-select>
+          <a-input-search
+            v-model:value="searchValue"
+            placeholder="输入名称搜索"
+            style="width: 200px"
+            @search="handleSearch"
+            allow-clear
+          />
+          <a-button-group>
+            <a-button :type="viewLayout === 'list' ? 'primary' : 'default'" @click="viewLayout = 'list'">
+              <template #icon><UnorderedListOutlined /></template>
+            </a-button>
+            <a-button :type="viewLayout === 'grid' ? 'primary' : 'default'" @click="viewLayout = 'grid'">
+              <template #icon><AppstoreOutlined /></template>
+            </a-button>
+          </a-button-group>
+        </a-space>
+      </div>
+    </div>
+
+    <!-- 可滚动内容区域 -->
+    <div class="scrollable-content">
+      <a-card class="table-card">
+        <a-table
+          :columns="columns"
+          :data-source="filteredProjects"
+          :loading="loading"
+          :row-selection="rowSelection"
+          :pagination="false"
+          :row-key="record => record.id"
+          @change="handleTableChange"
+          size="middle"
+        >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'">
                 <a @click="viewProject(record.id)">{{ record.name }}</a>
@@ -104,7 +107,21 @@
               </template>
             </template>
           </a-table>
-            </a-card>
+        </a-card>
+    </div>
+
+    <!-- 固定底部分页器 -->
+    <div class="fixed-footer">
+      <a-pagination
+        v-model:current="pagination.current"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :show-size-changer="true"
+        :show-quick-jumper="true"
+        :show-total="(total) => `共 ${total} 条`"
+        @change="handlePaginationChange"
+        @show-size-change="handlePaginationChange"
+      />
     </div>
 
     <!-- 创建/编辑项目对话框 -->
@@ -251,9 +268,7 @@ const rules = {
   ]
 }
 
-const projects = computed(() => {
-  return projectStore.projects
-})
+const projects = ref<Project[]>([])
 
 // 筛选项目
 const filteredProjects = computed(() => {
@@ -282,8 +297,26 @@ const filteredProjects = computed(() => {
 const loadProjects = async () => {
   loading.value = true
   try {
-    await projectStore.fetchProjects()
-    pagination.total = projects.value.length
+    const response = await projectApi.getProjects({
+      page: pagination.current,
+      size: pagination.pageSize,
+      search: searchValue.value || undefined,
+      status: statusFilter.value || undefined,
+    })
+    console.log('Projects API 响应:', response)
+    // 处理分页响应格式
+    if (response && typeof response === 'object' && 'items' in response) {
+      projects.value = response.items || []
+      pagination.total = response.total || 0
+    } else if (Array.isArray(response)) {
+      // 兼容旧格式（直接返回数组）
+      projects.value = response
+      pagination.total = response.length
+    } else {
+      projects.value = []
+      pagination.total = 0
+    }
+    console.log('加载项目列表成功:', { count: projects.value.length, total: pagination.total })
   } catch (error) {
     console.error('Failed to load projects:', error)
     message.error('加载项目列表失败')
@@ -307,12 +340,20 @@ const handleTableChange = (pag: any) => {
   }
 }
 
+const handlePaginationChange = (page: number, pageSize: number) => {
+  pagination.current = page
+  pagination.pageSize = pageSize
+  loadProjects()
+}
+
 const handleSearch = () => {
   pagination.current = 1
+  loadProjects()
 }
 
 const handleFilterChange = () => {
   pagination.current = 1
+  loadProjects()
 }
 
 const showCreateModal = () => {
@@ -441,24 +482,50 @@ onMounted(() => {
 
 <style scoped>
 .projects-container {
-  height: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: #f5f5f5;
+  overflow: hidden;
 }
 
-.projects-content {
+/* 固定顶部工具栏 */
+.fixed-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   background: #fff;
-  margin: 0;
+  border-bottom: 1px solid #f0f0f0;
   padding: 16px;
-  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .content-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+}
+
+/* 可滚动内容区域 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fff;
+}
+
+/* 固定底部分页器 */
+.fixed-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .table-card {

@@ -21,8 +21,23 @@ class ApiClient {
   private setupInterceptors() {
     // 请求拦截器
     this.instance.interceptors.request.use(
-      (config) => {
+      async (config) => {
         const userStore = useUserStore()
+        
+        // 确保 token 存在且有效
+        if (!userStore.accessToken) {
+          // 如果没有 token，尝试从 localStorage 恢复
+          const storedToken = localStorage.getItem('access_token')
+          if (storedToken) {
+            userStore.accessToken = storedToken
+          }
+        }
+        
+        // 如果仍然没有 token，且不是认证相关的请求，可能需要重新登录
+        if (!userStore.accessToken && !config.url?.includes('/auth/')) {
+          // 不在这里处理，让响应拦截器处理 401
+        }
+        
         if (userStore.accessToken) {
           config.headers.Authorization = `Bearer ${userStore.accessToken}`
         }
@@ -51,7 +66,7 @@ class ApiClient {
         // 对于导入API，即使status是error，也要返回响应让前端处理详细错误信息
         if (data && typeof data === 'object' && 'status' in data && data.status === 'error') {
           // 如果是导入API，不在这里显示错误，让前端处理
-          if (config?.url?.includes('/cases/import')) {
+          if (response.config.url?.includes('/cases/import')) {
             return response
           }
           message.error(data.message)
@@ -75,30 +90,47 @@ class ApiClient {
         if (response?.status === 401) {
           const userStore = useUserStore()
           
+          // 如果是认证相关的请求，直接拒绝
+          if (config?.url?.includes('/auth/login') || config?.url?.includes('/auth/register')) {
+            return Promise.reject(error)
+          }
+          
           // 避免重复刷新
           if (config?._retry) {
             // 已经重试过，直接登出
+            console.warn('Token 刷新失败，用户需要重新登录')
             message.error('登录已过期，请重新登录')
             userStore.logout()
-            window.location.href = '/login'
+            // 延迟跳转，避免在请求处理中立即跳转
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 100)
             return Promise.reject(error)
           }
           
           // 尝试刷新token
           try {
             config._retry = true
+            console.log('检测到 401 错误，尝试刷新 token...')
             await userStore.refreshAccessToken()
             
             // 重新发送原请求
-            if (config) {
+            if (config && userStore.accessToken) {
               config.headers.Authorization = `Bearer ${userStore.accessToken}`
+              console.log('Token 刷新成功，重新发送请求')
               return this.instance(config)
+            } else {
+              throw new Error('刷新 token 后仍无法获取 access token')
             }
           } catch (refreshError) {
             // 刷新失败，跳转到登录页
+            console.error('Token 刷新失败:', refreshError)
             message.error('登录已过期，请重新登录')
             userStore.logout()
-            window.location.href = '/login'
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 100)
+            return Promise.reject(error)
           }
         } else if (response?.status >= 500) {
           message.error('服务器内部错误，请稍后重试')

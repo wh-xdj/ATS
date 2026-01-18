@@ -2,8 +2,18 @@ import { apiClient } from '@/utils/api'
 import type { Project, PaginationResponse } from '@/types'
 
 export const projectApi = {
-  getProjects: async (): Promise<Project[]> => {
-    return apiClient.get('/projects')
+  getProjects: async (params?: {
+    page?: number
+    size?: number
+    search?: string
+    status?: string
+  }): Promise<PaginationResponse<Project>> => {
+    const queryParams: any = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.size) queryParams.size = params.size
+    if (params?.search) queryParams.search = params.search
+    if (params?.status) queryParams.status = params.status
+    return apiClient.get('/projects', { params: queryParams })
   },
 
   getProject: async (id: string): Promise<Project> => {

@@ -1,9 +1,19 @@
 import { apiClient } from '@/utils/api'
-import type { Environment } from '@/types'
+import type { Environment, PaginationResponse } from '@/types'
 
 export const environmentApi = {
-  getEnvironments: async (): Promise<Environment[]> => {
-    return apiClient.get('/environments')
+  getEnvironments: async (params?: {
+    page?: number
+    size?: number
+    search?: string
+    status?: boolean
+  }): Promise<PaginationResponse<Environment>> => {
+    const queryParams: any = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.size) queryParams.size = params.size
+    if (params?.search) queryParams.search = params.search
+    if (params?.status !== undefined) queryParams.status = params.status
+    return apiClient.get('/environments', { params: queryParams })
   },
 
   getEnvironment: async (id: string): Promise<Environment> => {

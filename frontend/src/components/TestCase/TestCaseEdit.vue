@@ -8,8 +8,8 @@
       </div>
       <div class="header-actions">
         <a-space>
-          <a-button @click="$emit('cancel')">取消</a-button>
-          <a-button type="primary" :loading="saving" @click="handleSave">
+          <a-button :disabled="loading" @click="handleCancel">取消</a-button>
+          <a-button type="primary" :loading="saving" :disabled="loading" @click="handleSave">
             <template #icon><SaveOutlined /></template>
             保存
           </a-button>
@@ -343,7 +343,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import {
   SaveOutlined,
@@ -505,7 +505,11 @@ const loadTestCase = async () => {
     message.error(errorMessage)
     // 即使加载失败，也要关闭loading，避免一直转圈
   } finally {
+    console.log('loadTestCase finally: 设置 loading.value = false')
     loading.value = false
+    // 使用 nextTick 确保 DOM 更新
+    await nextTick()
+    console.log('loadTestCase: nextTick 完成，loading 状态应该已更新')
   }
 }
 
@@ -586,6 +590,15 @@ const buildTreeData = (modules: any[]): any[] => {
   })
 
   return treeData
+}
+
+const handleCancel = () => {
+  console.log('取消按钮被点击，当前 loading 状态:', loading.value)
+  if (loading.value) {
+    console.warn('正在加载中，强制关闭 loading')
+    loading.value = false
+  }
+  emit('cancel')
 }
 
 const handleSave = async () => {

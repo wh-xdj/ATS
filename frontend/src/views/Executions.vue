@@ -17,9 +17,11 @@
       </template>
     </a-page-header>
 
-    <a-card class="executions-content">
-      <!-- 筛选区域 -->
-      <div class="filter-section">
+    <!-- 固定顶部工具栏和筛选区域 -->
+    <div class="fixed-header">
+      <a-card class="executions-content">
+        <!-- 筛选区域 -->
+        <div class="filter-section">
         <a-row :gutter="16">
           <a-col :xs="24" :sm="12" :md="8" :lg="6">
             <a-input-search
@@ -58,13 +60,17 @@
           </a-col>
         </a-row>
       </div>
+      </a-card>
+    </div>
 
+    <!-- 可滚动内容区域 -->
+    <div class="scrollable-content">
       <!-- 执行列表 -->
       <a-table
         :columns="columns"
         :data-source="executions"
         :loading="loading"
-        :pagination="pagination"
+        :pagination="false"
         :row-key="record => record.id"
         @change="handleTableChange"
       >
@@ -107,7 +113,21 @@
           </template>
         </template>
       </a-table>
-    </a-card>
+    </div>
+
+    <!-- 固定底部分页器 -->
+    <div class="fixed-footer">
+      <a-pagination
+        v-model:current="pagination.current"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :show-size-changer="true"
+        :show-quick-jumper="true"
+        :show-total="(total) => `共 ${total} 条`"
+        @change="handlePaginationChange"
+        @show-size-change="handlePaginationChange"
+      />
+    </div>
 
     <!-- 执行详情对话框 -->
     <a-modal
@@ -376,6 +396,12 @@ const handleTableChange = (pag: any) => {
   loadExecutions()
 }
 
+const handlePaginationChange = (page: number, pageSize: number) => {
+  pagination.current = page
+  pagination.pageSize = pageSize
+  loadExecutions()
+}
+
 const viewExecutionDetail = async (executionId: string) => {
   detailModalVisible.value = true
   detailLoading.value = true
@@ -513,15 +539,50 @@ watch(
 
 <style scoped>
 .executions-container {
-  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  overflow: hidden;
+}
+
+/* 固定顶部工具栏和筛选区域 */
+.fixed-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #f5f5f5;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
 }
 
 .executions-content {
-  margin-top: 16px;
+  margin: 16px;
 }
 
 .filter-section {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+
+/* 可滚动内容区域 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+/* 固定底部分页器 */
+.fixed-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .execution-detail {

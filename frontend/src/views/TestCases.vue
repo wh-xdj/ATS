@@ -94,8 +94,9 @@
       
       <!-- 右侧主内容区 -->
       <a-layout-content class="cases-content">
-        <!-- 顶部工具栏 -->
-        <div class="toolbar">
+        <!-- 固定顶部工具栏 -->
+        <div class="fixed-toolbar">
+          <div class="toolbar">
           <a-space>
             <a-button type="primary" @click="handleCreateCase">
             <template #icon><PlusOutlined /></template>
@@ -164,22 +165,24 @@
             </a-popover>
           </a-space>
         </div>
+        </div>
 
-
-        <!-- 表格 -->
-        <a-card class="table-card">
-          <a-table
-            :columns="columns"
-            :data-source="testCases"
-            :loading="loading"
-            :row-selection="rowSelection"
-            :pagination="pagination"
-            :row-key="record => record.id"
-            :scroll="{ x: 1500 }"
-            @change="handleTableChange"
-            size="middle"
-            :title="() => tableTitle"
-          >
+        <!-- 可滚动内容区域 -->
+        <div class="scrollable-table-content">
+          <!-- 表格 -->
+          <a-card class="table-card">
+            <a-table
+              :columns="columns"
+              :data-source="testCases"
+              :loading="loading"
+              :row-selection="rowSelection"
+              :pagination="false"
+              :row-key="record => record.id"
+              :scroll="{ x: 1500 }"
+              @change="handleTableChange"
+              size="middle"
+              :title="() => tableTitle"
+            >
             <template #bodyCell="{ column, record, index }">
               <template v-if="column.key === 'id'">
                 <a @click="handleViewCase(record)" class="case-link">{{ getCaseDisplayId(record, index) }}</a>
@@ -275,38 +278,54 @@
             </template>
           </a-table>
         </a-card>
-        
-        <!-- 底部批量操作栏 -->
-        <div v-if="selectedRowKeys.length > 0" class="batch-actions">
-          <a-space>
-            <span>已选择 {{ selectedRowKeys.length }} 条</span>
-            <a-dropdown>
-              <a-button>
-                导出
-                <template #icon><DownOutlined /></template>
-          </a-button>
-              <template #overlay>
-                <a-menu @click="handleExport">
-                  <a-menu-item key="excel">导出 Excel 格式 (xlsx)</a-menu-item>
-                  <a-menu-item key="xmind">导出思维导图 (xmind)</a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-            <a-button @click="handleBatchEdit">编辑</a-button>
-            <a-button @click="handleBatchMove">移动到</a-button>
-            <a-button @click="handleBatchCopy">复制到</a-button>
-            <a-dropdown>
-              <a-button>
-                <template #icon><MoreOutlined /></template>
-              </a-button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="delete" @click="handleBatchDelete">批量删除</a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-            <a-button @click="clearSelection">清空</a-button>
-          </a-space>
+        </div>
+
+        <!-- 固定底部分页器和批量操作栏 -->
+        <div class="fixed-footer">
+          <!-- 批量操作栏 -->
+          <div v-if="selectedRowKeys.length > 0" class="batch-actions">
+            <a-space>
+              <span>已选择 {{ selectedRowKeys.length }} 条</span>
+              <a-dropdown>
+                <a-button>
+                  导出
+                  <template #icon><DownOutlined /></template>
+                </a-button>
+                <template #overlay>
+                  <a-menu @click="handleExport">
+                    <a-menu-item key="excel">导出 Excel 格式 (xlsx)</a-menu-item>
+                    <a-menu-item key="xmind">导出思维导图 (xmind)</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <a-button @click="handleBatchEdit">编辑</a-button>
+              <a-button @click="handleBatchMove">移动到</a-button>
+              <a-button @click="handleBatchCopy">复制到</a-button>
+              <a-dropdown>
+                <a-button>
+                  <template #icon><MoreOutlined /></template>
+                </a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item key="delete" @click="handleBatchDelete">批量删除</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <a-button @click="clearSelection">清空</a-button>
+            </a-space>
+          </div>
+          <!-- 分页器 -->
+          <a-pagination
+            v-model:current="pagination.current"
+            v-model:page-size="pagination.pageSize"
+            :total="pagination.total"
+            :show-size-changer="true"
+            :show-quick-jumper="true"
+            :show-total="(total) => `共 ${total} 条`"
+            @change="handlePaginationChange"
+            @show-size-change="handlePaginationChange"
+            style="flex: 1; display: flex; justify-content: flex-end;"
+          />
         </div>
       </a-layout-content>
     </a-layout>
@@ -1021,9 +1040,12 @@ const loadTestCases = async () => {
 
     // 高级筛选条件
     if (advancedFilters.value.length > 0) {
+      console.log('应用高级筛选条件:', advancedFilters.value, '逻辑:', filterLogic.value)
+      
       // 处理高级筛选条件
-      advancedFilters.value.forEach((condition) => {
+      advancedFilters.value.forEach((condition, index) => {
         const { field, operator, value } = condition
+        console.log(`筛选条件 ${index + 1}:`, { field, operator, value })
         
         // 根据字段和操作符构建查询参数
         switch (field) {
@@ -1034,11 +1056,17 @@ const loadTestCases = async () => {
                 ? `${params.search} ${value}` 
                 : value
             } else if (operator === 'equals' && value) {
-              params.case_id = value
+              params.search = params.search 
+                ? `${params.search} ${value}` 
+                : value
             }
             break
           case 'name':
             if (operator === 'contains' && value) {
+              params.search = params.search 
+                ? `${params.search} ${value}` 
+                : value
+            } else if (operator === 'equals' && value) {
               params.search = params.search 
                 ? `${params.search} ${value}` 
                 : value
@@ -1051,17 +1079,29 @@ const loadTestCases = async () => {
               moduleIds.forEach((id: string) => {
                 allModuleIds.push(...getModuleAndChildrenIds(id))
               })
-              // 合并到现有的moduleIds
-              if (params.moduleIds) {
-                const existingIds = params.moduleIds.split(',')
-                params.moduleIds = [...new Set([...existingIds, ...allModuleIds])].join(',')
-              } else {
+              // 如果使用 AND 逻辑，覆盖现有 moduleIds；如果使用 OR 逻辑，合并
+              if (filterLogic.value === 'and') {
                 params.moduleIds = [...new Set(allModuleIds)].join(',')
+              } else {
+                // OR 逻辑：合并到现有的moduleIds
+                if (params.moduleIds) {
+                  const existingIds = params.moduleIds.split(',')
+                  params.moduleIds = [...new Set([...existingIds, ...allModuleIds])].join(',')
+                } else {
+                  params.moduleIds = [...new Set(allModuleIds)].join(',')
+                }
               }
+            } else if (operator === 'not_belongs_to' && value) {
+              // 不属于某个模块的筛选需要后端支持，暂时跳过
+              console.warn('not_belongs_to 操作符暂不支持')
             }
             break
           case 'priority':
             if (operator === 'equals' && value) {
+              // AND 逻辑：如果已有 priority，需要后端支持多条件；OR 逻辑：取第一个
+              if (filterLogic.value === 'and' && params.priority && params.priority !== value) {
+                console.warn('AND 逻辑下多个 priority 条件冲突，使用最后一个')
+              }
               params.priority = value
             } else if (operator === 'in' && Array.isArray(value) && value.length > 0) {
               // 多个优先级，取第一个（API可能不支持多值）
@@ -1070,17 +1110,23 @@ const loadTestCases = async () => {
             break
           case 'type':
             if (operator === 'equals' && value) {
+              if (filterLogic.value === 'and' && params.type && params.type !== value) {
+                console.warn('AND 逻辑下多个 type 条件冲突，使用最后一个')
+              }
               params.type = value
             }
             break
           case 'status':
             if (operator === 'equals' && value) {
+              if (filterLogic.value === 'and' && params.status && params.status !== value) {
+                console.warn('AND 逻辑下多个 status 条件冲突，使用最后一个')
+              }
               params.status = value
             }
             break
           case 'isAutomated':
-            if (operator === 'equals' && value !== undefined) {
-              params.is_automated = value
+            if (operator === 'equals' && value !== undefined && value !== null) {
+              params.is_automated = value === true || value === 'true'
             }
             break
           case 'tags':
@@ -1089,11 +1135,27 @@ const loadTestCases = async () => {
               params.tags = tags.join(',')
             }
             break
+          case 'requirementRef':
+            if (operator === 'contains' && value) {
+              params.requirement_ref = value
+            } else if (operator === 'equals' && value) {
+              params.requirement_ref = value
+            }
+            break
+          case 'precondition':
+            if (operator === 'contains' && value) {
+              params.precondition = value
+            }
+            break
         }
       })
+      
+      console.log('筛选后的查询参数:', params)
     }
 
+    console.log('调用 getTestCases API，参数:', params)
     const response = await testCaseApi.getTestCases(projectId.value, params)
+    console.log('API 返回结果:', { total: response.total, itemsCount: response.items?.length })
     testCases.value = response.items || []
     pagination.total = response.total || 0
   } catch (error) {
@@ -1168,8 +1230,13 @@ const handleSearch = () => {
 
 // 应用高级筛选
 const handleFilterApply = (conditions: any[], logic: string) => {
+  console.log('handleFilterApply 被调用:', { conditions, logic })
   advancedFilters.value = conditions
   filterLogic.value = logic as 'and' | 'or'
+  console.log('设置筛选条件:', { 
+    advancedFilters: advancedFilters.value, 
+    filterLogic: filterLogic.value 
+  })
   pagination.current = 1
   loadTestCases()
 }
@@ -1205,6 +1272,13 @@ const handleTableChange = (pag: any, filters: any, sorter: any) => {
     pagination.current = pag.current
     pagination.pageSize = pag.pageSize
   }
+  loadTestCases()
+}
+
+// 处理分页变化
+const handlePaginationChange = (page: number, pageSize: number) => {
+  pagination.current = page
+  pagination.pageSize = pageSize
   loadTestCases()
 }
 
@@ -1966,7 +2040,15 @@ const handleKeyUp = (e: KeyboardEvent) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 确保项目列表已加载
+  if (projects.value.length === 0) {
+    await projectStore.fetchProjects()
+  }
+  // 如果没有当前项目，设置第一个项目为当前项目
+  if (!projectStore.currentProject && projects.value.length > 0) {
+    projectStore.setCurrentProject(projects.value[0])
+  }
   if (projectId.value) {
     loadTestCases()
     loadModuleTree()
@@ -2084,21 +2166,38 @@ onUnmounted(() => {
   background-color: #f0f0f0;
 }
 
-  .cases-content {
+.cases-content {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   margin: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* 固定顶部工具栏 */
+.fixed-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
   padding: 16px;
-  overflow-y: auto;
-  }
-  
+  flex-shrink: 0;
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
-  }
+}
+
+/* 可滚动表格内容区域 */
+.scrollable-table-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px;
+}
   
 .filter-panel {
   margin-bottom: 16px;
@@ -2126,14 +2225,24 @@ onUnmounted(() => {
 }
   
 .batch-actions {
+  display: flex;
+  align-items: center;
+}
+
+/* 固定底部分页器和批量操作栏 */
+.fixed-footer {
   position: sticky;
   bottom: 0;
+  z-index: 100;
   background: #fff;
-  padding: 12px 16px;
   border-top: 1px solid #f0f0f0;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-  }
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
   
 /* 响应式设计 */
 @media (max-width: 1200px) {

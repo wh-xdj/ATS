@@ -11,9 +11,21 @@ export const useProjectStore = defineStore('project', () => {
   const fetchProjects = async () => {
     loading.value = true
     try {
-      const response = await projectApi.getProjects()
-      projects.value = response
-      return response
+      // 获取所有项目（不分页，用于下拉选择等场景）
+      const response = await projectApi.getProjects({
+        page: 1,
+        size: 1000,  // 获取足够多的项目
+      })
+      // 处理分页响应格式
+      if (response && typeof response === 'object' && 'items' in response) {
+        projects.value = response.items || []
+      } else if (Array.isArray(response)) {
+        // 兼容旧格式（直接返回数组）
+        projects.value = response
+      } else {
+        projects.value = []
+      }
+      return projects.value
     } finally {
       loading.value = false
     }

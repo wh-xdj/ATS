@@ -13,6 +13,11 @@ export const testCaseApi = {
       status?: string
       priority?: string
       type?: string
+      tags?: string
+      is_automated?: boolean
+      requirement_ref?: string
+      precondition?: string
+      [key: string]: any  // 允许其他参数
     }
   ): Promise<PaginationResponse<TestCase>> => {
     // 转换参数名称为后端期望的 snake_case
@@ -25,14 +30,19 @@ export const testCaseApi = {
       module_ids: params?.moduleIds,  // 多个模块 ID（逗号分隔）
       status: params?.status,
       priority: params?.priority,
-      type: params?.type
+      type: params?.type,
+      tags: params?.tags,
+      is_automated: params?.is_automated,
+      requirement_ref: params?.requirement_ref,
+      precondition: params?.precondition
     }
-    // 移除 undefined 值
+    // 移除 undefined 和 null 值
     Object.keys(allParams).forEach(key => {
-      if (allParams[key] === undefined) {
+      if (allParams[key] === undefined || allParams[key] === null || allParams[key] === '') {
         delete allParams[key]
       }
     })
+    console.log('getTestCases API 调用参数:', allParams)
     return apiClient.get('/test-cases', { params: allParams })
   },
 

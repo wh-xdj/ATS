@@ -12,12 +12,14 @@
       </template>
     </a-page-header>
 
-    <a-card class="environments-content">
-      <a-spin :spinning="loading">
-        <a-table
-          :columns="columns"
-          :data-source="environments"
-          :pagination="pagination"
+    <!-- 可滚动内容区域 -->
+    <div class="scrollable-content">
+      <a-card class="environments-content">
+        <a-spin :spinning="loading">
+          <a-table
+            :columns="columns"
+            :data-source="environments"
+            :pagination="false"
           :row-key="record => record.id"
           :scroll="{ x: 1000 }"
           @change="handleTableChange"
@@ -83,6 +85,21 @@
         </a-table>
       </a-spin>
     </a-card>
+    </div>
+
+    <!-- 固定底部分页器 -->
+    <div class="fixed-footer">
+      <a-pagination
+        v-model:current="pagination.current"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :show-size-changer="true"
+        :show-quick-jumper="true"
+        :show-total="(total) => `共 ${total} 条`"
+        @change="handlePaginationChange"
+        @show-size-change="handlePaginationChange"
+      />
+    </div>
 
     <!-- 启动命令对话框 -->
     <a-modal
@@ -721,24 +738,48 @@ const columns = [
 const loadEnvironments = async () => {
   loading.value = true
   try {
-    const response = await environmentApi.getEnvironments()
+    const response = await environmentApi.getEnvironments({
+      page: pagination.current,
+      size: pagination.pageSize,
+    })
+    console.log('Environments API 响应:', response)
     // 处理API响应格式
-    const data = response.data || response
-    environments.value = Array.isArray(data) ? data : []
-    // 确保字段名正确映射（后端可能返回snake_case，前端需要camelCase）
-    environments.value = environments.value.map(env => ({
-      ...env,
-      remoteWorkDir: env.remoteWorkDir || env.remote_work_dir || '',
-      nodeIp: env.nodeIp || env.node_ip || '',
-      osType: env.osType || env.os_type || '',
-      osVersion: env.osVersion || env.os_version || '',
-      cpuInfo: env.cpuInfo || env.cpu_info || null,
-      memoryInfo: env.memoryInfo || env.memory_info || null,
-      diskInfo: env.diskInfo || env.disk_info || null,
-      isOnline: env.isOnline !== undefined ? env.isOnline : (env.is_online !== undefined ? env.is_online : false),
-      lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
-    }))
-    pagination.total = environments.value.length
+    if (response && typeof response === 'object' && 'items' in response) {
+      const items = response.items || []
+      // 确保字段名正确映射（后端可能返回snake_case，前端需要camelCase）
+      environments.value = items.map((env: any) => ({
+        ...env,
+        remoteWorkDir: env.remoteWorkDir || env.remote_work_dir || '',
+        nodeIp: env.nodeIp || env.node_ip || '',
+        osType: env.osType || env.os_type || '',
+        osVersion: env.osVersion || env.os_version || '',
+        cpuInfo: env.cpuInfo || env.cpu_info || null,
+        memoryInfo: env.memoryInfo || env.memory_info || null,
+        diskInfo: env.diskInfo || env.disk_info || null,
+        isOnline: env.isOnline !== undefined ? env.isOnline : (env.is_online !== undefined ? env.is_online : false),
+        lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
+      }))
+      pagination.total = response.total || 0
+    } else if (Array.isArray(response)) {
+      // 兼容旧格式（直接返回数组）
+      environments.value = response.map((env: any) => ({
+        ...env,
+        remoteWorkDir: env.remoteWorkDir || env.remote_work_dir || '',
+        nodeIp: env.nodeIp || env.node_ip || '',
+        osType: env.osType || env.os_type || '',
+        osVersion: env.osVersion || env.os_version || '',
+        cpuInfo: env.cpuInfo || env.cpu_info || null,
+        memoryInfo: env.memoryInfo || env.memory_info || null,
+        diskInfo: env.diskInfo || env.disk_info || null,
+        isOnline: env.isOnline !== undefined ? env.isOnline : (env.is_online !== undefined ? env.is_online : false),
+        lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
+      }))
+      pagination.total = response.length
+    } else {
+      environments.value = []
+      pagination.total = 0
+    }
+    console.log('加载环境列表成功:', { count: environments.value.length, total: pagination.total })
   } catch (error) {
     console.error('Failed to load environments:', error)
     message.error('加载环境列表失败')
@@ -750,6 +791,13 @@ const loadEnvironments = async () => {
 const handleTableChange = (pag: any) => {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
+  loadEnvironments()
+}
+
+const handlePaginationChange = (page: number, pageSize: number) => {
+  pagination.current = page
+  pagination.pageSize = pageSize
+  loadEnvironments()
 }
 
 const showCreateModal = () => {
@@ -1412,11 +1460,36 @@ onMounted(() => {
 
 <style scoped>
 .environments-container {
-  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  overflow: hidden;
+}
+
+/* 可滚动内容区域 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .environments-content {
-  margin-top: 16px;
+  margin: 0;
+}
+
+/* 固定底部分页器 */
+.fixed-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .execution-log {

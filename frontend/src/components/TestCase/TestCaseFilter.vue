@@ -69,7 +69,19 @@
           </a-select>
 
           <!-- 值输入框 -->
-          <template v-if="getValueComponent(condition.field) === 'a-select'">
+          <template v-if="getValueComponent(condition.field) === 'a-tree-select'">
+            <a-tree-select
+              v-model:value="condition.value"
+              :tree-data="moduleTreeData"
+              :placeholder="getValuePlaceholder(condition.field)"
+              style="flex: 1; margin-left: 8px"
+              :allow-clear="true"
+              :show-search="true"
+              :filter-tree-node="filterModuleOption"
+              tree-node-filter-prop="title"
+            />
+          </template>
+          <template v-else-if="getValueComponent(condition.field) === 'a-select'">
             <a-select
               v-model:value="condition.value"
               :placeholder="getValuePlaceholder(condition.field)"
@@ -78,8 +90,6 @@
               :style="{ width: getValueWidth(condition.field) }"
               :allow-clear="true"
               :mode="condition.field === 'tags' ? 'tags' : undefined"
-              :show-search="condition.field === 'moduleId'"
-              :filter-option="condition.field === 'moduleId' ? filterModuleOption : undefined"
             />
           </template>
           <a-input-number
@@ -245,8 +255,9 @@ const getValueComponent = (fieldKey: string) => {
 
   switch (field.type) {
     case 'select':
-    case 'module':
       return 'a-select'
+    case 'module':
+      return 'a-tree-select'  // 模块使用树形选择器
     case 'number':
       return 'a-input-number'
     case 'date':
@@ -342,22 +353,35 @@ const removeCondition = (index: number) => {
 
 // 应用筛选
 const handleApply = () => {
+  console.log('handleApply 被调用，当前筛选条件:', filterConditions.value)
+  console.log('筛选逻辑:', filterLogic.value)
+  
   // 验证条件（排除空值，但允许"为空"和"不为空"操作符）
   const validConditions = filterConditions.value.filter(c => {
-    if (!c.field || !c.operator) return false
+    if (!c.field || !c.operator) {
+      console.log('条件无效（缺少字段或操作符）:', c)
+      return false
+    }
     // "为空"和"不为空"操作符不需要值
     if (c.operator === 'is_empty' || c.operator === 'is_not_empty') {
       return true
     }
     // 其他操作符需要值
-    return c.value !== null && c.value !== undefined && c.value !== ''
+    const hasValue = c.value !== null && c.value !== undefined && c.value !== ''
+    if (!hasValue) {
+      console.log('条件无效（缺少值）:', c)
+    }
+    return hasValue
   })
+
+  console.log('有效筛选条件:', validConditions)
 
   if (validConditions.length === 0) {
     message.warning('请至少添加一个有效的筛选条件')
     return
   }
 
+  console.log('发送 apply 事件:', { conditions: validConditions, logic: filterLogic.value })
   emit('apply', validConditions, filterLogic.value)
   emit('update:visible', false)
 }

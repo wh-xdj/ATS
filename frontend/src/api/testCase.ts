@@ -63,6 +63,12 @@ export const testCaseApi = {
     return apiClient.put(`/test-cases/${caseId}`, payload)
   },
 
+  getFilterFields: async (projectId: string): Promise<any[]> => {
+    return apiClient.get('/test-cases/filter-fields', {
+      params: { project_id: projectId }
+    })
+  },
+
   deleteTestCase: async (projectId: string, caseId: string): Promise<void> => {
     return apiClient.delete(`/test-cases/${caseId}`, {
       params: { project_id: projectId }

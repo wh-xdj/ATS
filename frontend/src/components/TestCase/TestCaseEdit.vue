@@ -1,11 +1,12 @@
 <template>
   <div class="test-case-edit">
-    <a-page-header
-      :title="isNewCase ? '新建用例' : '编辑用例'"
-      :sub-title="testCase.caseCode || '自动生成编号'"
-      @back="$emit('cancel')"
-    >
-      <template #extra>
+    <div class="edit-header">
+      <div class="header-title">
+        <span class="title-text">{{ isNewCase ? '新建用例' : '编辑用例' }}</span>
+        <span v-if="testCase.caseCode" class="sub-title">{{ testCase.caseCode }}</span>
+        <span v-else class="sub-title">自动生成编号</span>
+      </div>
+      <div class="header-actions">
         <a-space>
           <a-button @click="$emit('cancel')">取消</a-button>
           <a-button type="primary" :loading="saving" @click="handleSave">
@@ -13,18 +14,19 @@
             保存
           </a-button>
         </a-space>
-      </template>
-    </a-page-header>
+      </div>
+    </div>
 
-    <a-spin :spinning="loading">
-      <a-form
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        :label-col="{ span: 4 }"
-        :wrapper-col="{ span: 20 }"
-        layout="horizontal"
-      >
+    <div class="edit-content">
+      <a-spin :spinning="loading">
+        <a-form
+          ref="formRef"
+          :model="formData"
+          :rules="formRules"
+          :label-col="{ span: 4 }"
+          :wrapper-col="{ span: 20 }"
+          layout="horizontal"
+        >
         <!-- 基本信息卡片 -->
         <a-card title="基本信息" class="info-card">
           <a-row :gutter="16">
@@ -135,103 +137,93 @@
 
         <!-- 测试步骤卡片 -->
         <a-card title="测试步骤" class="info-card">
-          <div class="steps-header">
-            <a-space>
-              <a-button type="primary" @click="addStep">
+          <div class="steps-container">
+            <div v-if="formData.steps.length > 0" class="steps-table-wrapper">
+              <div class="steps-table-header">
+                <div class="drag-col"></div>
+                <div class="sequence-col">序号</div>
+                <div class="action-col">用例步骤</div>
+                <div class="expected-col">预期结果</div>
+                <div class="operations-col">操作</div>
+              </div>
+              <VueDraggable
+                v-model="formData.steps"
+                handle=".drag-handle"
+                item-key="id"
+                class="steps-list"
+                animation="200"
+                @end="handleDragEnd"
+              >
+                <template #item="{ element, index }">
+                  <div class="step-row">
+                    <div class="drag-col">
+                      <HolderOutlined class="drag-handle" />
+                    </div>
+                    <div class="sequence-col">
+                      <div class="step-sequence">{{ index + 1 }}</div>
+                    </div>
+                    <div class="action-col">
+                      <a-textarea
+                        v-model:value="element.action"
+                        placeholder="请输入用例步骤"
+                        :rows="2"
+                        :auto-size="{ minRows: 2, maxRows: 4 }"
+                        @blur="updateStepNumber"
+                      />
+                    </div>
+                    <div class="expected-col">
+                      <a-textarea
+                        v-model:value="element.expected"
+                        placeholder="请输入预期结果"
+                        :rows="2"
+                        :auto-size="{ minRows: 2, maxRows: 4 }"
+                        @blur="updateStepNumber"
+                      />
+                    </div>
+                    <div class="operations-col">
+                      <a-dropdown :trigger="['click']">
+                        <a-button type="text" size="small">
+                          <template #icon><MoreOutlined /></template>
+                        </a-button>
+                        <template #overlay>
+                          <a-menu @click="({ key }) => handleStepOperation(key, index)">
+                            <a-menu-item key="copy">
+                              <CopyOutlined />
+                              复制
+                            </a-menu-item>
+                            <a-menu-item key="insertAbove">
+                              <ArrowUpOutlined />
+                              在上方插入
+                            </a-menu-item>
+                            <a-menu-item key="insertBelow">
+                              <ArrowDownOutlined />
+                              在下方插入
+                            </a-menu-item>
+                            <a-menu-divider />
+                            <a-menu-item key="delete" danger>
+                              <DeleteOutlined />
+                              删除
+                            </a-menu-item>
+                          </a-menu>
+                        </template>
+                      </a-dropdown>
+                    </div>
+                  </div>
+                </template>
+              </VueDraggable>
+            </div>
+            <a-empty
+              v-else
+              description="暂无测试步骤，请添加"
+              :image="false"
+            />
+            <div class="steps-footer">
+              <a-button type="dashed" block @click="addStep">
                 <template #icon><PlusOutlined /></template>
                 添加步骤
               </a-button>
-              <a-button @click="importSteps">
-                <template #icon><ImportOutlined /></template>
-                批量导入
-              </a-button>
-            </a-space>
-          </div>
-
-          <div class="steps-container">
-            <a-empty
-              v-if="formData.steps.length === 0"
-              description="暂无测试步骤，请添加"
-            >
-              <a-button type="primary" @click="addStep">
-                <template #icon><PlusOutlined /></template>
-                添加第一个步骤
-              </a-button>
-            </a-empty>
-
-            <div v-else class="steps-list">
-              <div
-                v-for="(step, index) in formData.steps"
-                :key="index"
-                class="step-item"
-              >
-                <a-card :title="`步骤 ${step.step}`" size="small">
-                  <template #extra>
-                    <a-space>
-                      <a-button
-                        type="text"
-                        size="small"
-                        @click="moveStep(index, -1)"
-                        :disabled="index === 0"
-                      >
-                        <template #icon><ArrowUpOutlined /></template>
-                      </a-button>
-                      <a-button
-                        type="text"
-                        size="small"
-                        @click="moveStep(index, 1)"
-                        :disabled="index === formData.steps.length - 1"
-                      >
-                        <template #icon><ArrowDownOutlined /></template>
-                      </a-button>
-                      <a-button
-                        type="text"
-                        size="small"
-                        danger
-                        @click="removeStep(index)"
-                      >
-                        <template #icon><DeleteOutlined /></template>
-                      </a-button>
-                    </a-space>
-                  </template>
-
-                  <a-row :gutter="16">
-                    <a-col :span="12">
-                      <a-form-item label="操作描述">
-                        <a-textarea
-                          v-model:value="step.action"
-                          placeholder="请输入操作描述"
-                          :rows="3"
-                        />
-                      </a-form-item>
-                    </a-col>
-                    <a-col :span="12">
-                      <a-form-item label="预期结果">
-                        <a-textarea
-                          v-model:value="step.expected"
-                          placeholder="请输入预期结果"
-                          :rows="3"
-                        />
-                      </a-form-item>
-                    </a-col>
-                  </a-row>
-                </a-card>
-              </div>
             </div>
           </div>
-        </a-card>
-
-        <!-- 预期结果卡片 -->
-        <a-card title="总体预期结果" class="info-card">
-          <a-form-item>
-            <a-textarea
-              v-model:value="formData.expectedResult"
-              placeholder="请输入总体预期结果"
-              :rows="4"
-              :maxlength="1000"
-              show-count
-            />
-          </a-form-item>
         </a-card>
 
         <!-- 附件管理卡片 -->
@@ -272,8 +264,9 @@
             </a-list>
           </div>
         </a-card>
-      </a-form>
-    </a-spin>
+        </a-form>
+      </a-spin>
+    </div>
 
     <!-- 批量导入步骤对话框 -->
     <a-modal
@@ -351,6 +344,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
 import {
   SaveOutlined,
   PlusOutlined,
@@ -359,7 +353,10 @@ import {
   ArrowDownOutlined,
   UploadOutlined,
   PaperClipOutlined,
-  ImportOutlined
+  ImportOutlined,
+  MoreOutlined,
+  CopyOutlined,
+  HolderOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
@@ -405,7 +402,6 @@ const formData = reactive({
   priority: 'P2' as const,
   moduleId: '',
   precondition: '',
-  expectedResult: '',
   requirementRef: '',
   tags: [] as string[],
   steps: [] as TestCaseStep[],
@@ -435,6 +431,8 @@ const importTableColumns = [
   { title: '操作', key: 'operations', width: 80 }
 ]
 
+// 步骤表格列定义（已移除，改用自定义表格）
+
 // 计算属性
 const isNewCase = computed(() => !props.caseId)
 
@@ -450,33 +448,73 @@ const formRules: Record<string, Rule[]> = {
 
 // 方法
 const loadTestCase = async () => {
-  if (!props.caseId) return
+  if (!props.caseId) {
+    // 新建用例，不需要加载数据
+    loading.value = false
+    return
+  }
+
+  if (!props.projectId) {
+    console.error('Project ID is missing')
+    message.error('项目ID缺失，无法加载用例')
+    loading.value = false
+    return
+  }
 
   loading.value = true
+  
+  // 添加超时保护
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('加载超时，请检查网络连接')), 30000) // 30秒超时
+  })
+  
   try {
-    const data = await testCaseApi.getTestCase(props.projectId, props.caseId)
+    console.log('Loading test case:', { caseId: props.caseId, projectId: props.projectId })
+    const data = await Promise.race([
+      testCaseApi.getTestCase(props.projectId, props.caseId),
+      timeoutPromise
+    ]) as any
+    console.log('Test case loaded:', data)
+    
+    if (!data) {
+      throw new Error('用例数据为空')
+    }
+    
     Object.assign(testCase, data)
     
     // 填充表单数据（处理字段名映射：后端可能返回下划线格式）
-    formData.name = data.name
-    formData.type = data.type
-    formData.priority = data.priority
+    formData.name = data.name || ''
+    formData.type = data.type || 'functional'
+    formData.priority = data.priority || 'P2'
     formData.moduleId = (data.moduleId || data.module_id || '') as string
     formData.precondition = data.precondition || ''
-    formData.expectedResult = data.expectedResult || data.expected_result || ''
     formData.requirementRef = data.requirementRef || data.requirement_ref || ''
     formData.tags = data.tags || []
-    formData.steps = data.steps || []
+    // 为步骤添加唯一ID（如果还没有）
+    formData.steps = (data.steps || []).map((step: any, index: number) => ({
+      ...step,
+      id: step.id || `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+    }))
     formData.isAutomated = data.isAutomated ?? data.is_automated ?? false
-  } catch (error) {
+    
+    // 更新步骤编号
+    updateStepNumber()
+  } catch (error: any) {
     console.error('Failed to load test case:', error)
-    message.error('加载用例失败')
+    const errorMessage = error?.response?.data?.message || error?.message || '加载用例失败'
+    message.error(errorMessage)
+    // 即使加载失败，也要关闭loading，避免一直转圈
   } finally {
     loading.value = false
   }
 }
 
 const loadModuleTree = async () => {
+  if (!props.projectId) {
+    console.warn('Project ID is missing, skipping module tree load')
+    return
+  }
+  
   try {
     const response = await projectApi.getModules(props.projectId)
     // API 返回格式可能是 { modules: [...], totalCaseCount: ... } 或直接是数组
@@ -485,6 +523,7 @@ const loadModuleTree = async () => {
     moduleTreeData.value = buildTreeData(Array.isArray(moduleList) ? moduleList : [])
   } catch (error) {
     console.error('Failed to load modules:', error)
+    // 模块加载失败不影响用例编辑，只记录错误
   }
 }
 
@@ -581,7 +620,6 @@ const handleSave = async () => {
       priority: formData.priority || 'P2',
       module_id: moduleIdValue,  // 保留 null 值
       precondition: formData.precondition && formData.precondition.trim() !== '' ? formData.precondition.trim() : null,
-      expected_result: formData.expectedResult && formData.expectedResult.trim() !== '' ? formData.expectedResult.trim() : null,
       requirement_ref: formData.requirementRef && formData.requirementRef.trim() !== '' ? formData.requirementRef.trim() : null,
       tags: Array.isArray(formData.tags) ? formData.tags : [],
       steps: processedSteps,  // 确保始终是数组
@@ -634,17 +672,82 @@ const addStep = () => {
   const newStep: TestCaseStep = {
     step: formData.steps.length + 1,
     action: '',
+    expected: '',
+    id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` // 添加唯一ID
+  } as any
+  formData.steps.push(newStep)
+  updateStepNumber()
+}
+
+// 更新步骤编号
+const updateStepNumber = () => {
+  formData.steps.forEach((step, index) => {
+    step.step = index + 1
+  })
+}
+
+// 处理步骤操作
+const handleStepOperation = (operation: string, index: number) => {
+  switch (operation) {
+    case 'copy':
+      copyStep(index)
+      break
+    case 'insertAbove':
+      insertStepAbove(index)
+      break
+    case 'insertBelow':
+      insertStepBelow(index)
+      break
+    case 'delete':
+      removeStep(index)
+      break
+  }
+}
+
+// 复制步骤
+const copyStep = (index: number) => {
+  const step = formData.steps[index]
+  const newStep: TestCaseStep = {
+    step: index + 2,
+    action: step.action,
+    expected: step.expected
+  }
+  formData.steps.splice(index + 1, 0, newStep)
+  updateStepNumber()
+}
+
+// 在上方插入步骤
+const insertStepAbove = (index: number) => {
+  const newStep: TestCaseStep = {
+    step: index + 1,
+    action: '',
     expected: ''
   }
-  formData.steps.push(newStep)
+  formData.steps.splice(index, 0, newStep)
+  updateStepNumber()
+}
+
+// 在下方插入步骤
+const insertStepBelow = (index: number) => {
+  const newStep: TestCaseStep = {
+    step: index + 2,
+    action: '',
+    expected: ''
+  }
+  formData.steps.splice(index + 1, 0, newStep)
+  updateStepNumber()
 }
 
 const removeStep = (index: number) => {
   formData.steps.splice(index, 1)
-  // 重新编号
-  formData.steps.forEach((step, i) => {
-    step.step = i + 1
-  })
+  updateStepNumber()
+}
+
+
+// 拖拽结束处理
+const handleDragEnd = () => {
+  // 拖拽结束后更新步骤编号
+  updateStepNumber()
 }
 
 const moveStep = (index: number, direction: number) => {
@@ -739,22 +842,63 @@ const viewAttachments = () => {
 
 
 // 生命周期
-onMounted(() => {
-  loadTestCase()
-  loadModuleTree()
-  
-  // 如果是新建用例且传入了默认模块ID，则设置默认值
-  if (!props.caseId && props.defaultModuleId) {
-    formData.moduleId = props.defaultModuleId
+onMounted(async () => {
+  // 如果是新建用例，不需要加载数据，直接设置默认值
+  if (!props.caseId) {
+    loading.value = false
+    if (props.defaultModuleId) {
+      formData.moduleId = props.defaultModuleId
+    }
+    // 只加载模块树（用于选择模块）
+    loadModuleTree()
+    return
   }
+  
+  // 编辑用例：并行加载用例数据和模块树，提高加载速度
+  // 使用 Promise.allSettled 确保即使一个失败，另一个也能完成
+  await Promise.allSettled([
+    loadTestCase(),
+    loadModuleTree()
+  ])
 })
 
 // 监听 props 变化
 watch(
   () => props.caseId,
-  () => {
-    if (props.caseId) {
+  (newCaseId, oldCaseId) => {
+    // 只有当 caseId 真正变化时才重新加载
+    if (newCaseId && newCaseId !== oldCaseId) {
       loadTestCase()
+    } else if (!newCaseId) {
+      // 如果变为新建用例，重置表单
+      loading.value = false
+      Object.assign(formData, {
+        name: '',
+        type: 'functional',
+        priority: 'P2',
+        moduleId: props.defaultModuleId || '',
+        precondition: '',
+        requirementRef: '',
+        tags: [],
+        steps: [],
+        isAutomated: false
+      })
+      updateStepNumber()
+    }
+  }
+)
+
+// 监听 projectId 变化
+watch(
+  () => props.projectId,
+  (newProjectId, oldProjectId) => {
+    if (newProjectId && newProjectId !== oldProjectId) {
+      // 项目变化时重新加载模块树
+      loadModuleTree()
+      // 如果有 caseId，重新加载用例
+      if (props.caseId) {
+        loadTestCase()
+      }
     }
   }
 )
@@ -771,7 +915,6 @@ defineExpose({
       priority: 'P2',
       moduleId: '',
       precondition: '',
-      expectedResult: '',
       requirementRef: '',
       tags: [],
       steps: [],
@@ -783,9 +926,52 @@ defineExpose({
 
 <style scoped>
 .test-case-edit {
+  padding: 0;
+  background: #fff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.sub-title {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.edit-content {
   padding: 24px;
-  background: #f5f5f5;
-  min-height: 100vh;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .info-card {
@@ -800,6 +986,105 @@ defineExpose({
 
 .steps-container {
   margin-top: 16px;
+}
+
+.steps-footer {
+  margin-top: 16px;
+}
+
+.steps-table-wrapper {
+  margin-bottom: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.steps-table-header {
+  display: flex;
+  background-color: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px;
+  align-items: flex-start;
+  transition: background-color 0.3s;
+}
+
+.step-row:hover {
+  background-color: #fafafa;
+}
+
+.step-row:last-child {
+  border-bottom: none;
+}
+
+.drag-col {
+  width: 40px;
+  text-align: center;
+  padding: 8px 4px !important;
+}
+
+.sequence-col {
+  width: 80px;
+  text-align: center;
+  padding: 8px !important;
+}
+
+.action-col {
+  width: 40%;
+  padding: 8px !important;
+}
+
+.expected-col {
+  width: 40%;
+  padding: 8px !important;
+}
+
+.operations-col {
+  width: 80px;
+  text-align: center;
+  padding: 8px !important;
+}
+
+.step-sequence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.drag-handle {
+  cursor: move;
+  color: #999;
+  font-size: 16px;
+  padding: 4px;
+  transition: color 0.3s;
+}
+
+.drag-handle:hover {
+  color: #1890ff;
+}
+
+.step-row {
+  cursor: default;
 }
 
 .steps-list {

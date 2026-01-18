@@ -1,39 +1,19 @@
 <template>
   <div class="test-case-detail">
-    <a-page-header
-      :title="testCase?.name || '用例详情'"
-      :sub-title="testCase?.caseCode"
-      @back="handleBack"
-    >
-      <template #extra>
+    <div class="detail-header">
+      <div class="header-title">
+        <span class="title-text">{{ testCase?.name || '用例详情' }}</span>
+        <span v-if="testCase?.caseCode" class="sub-title">{{ testCase.caseCode }}</span>
+      </div>
+      <div class="header-actions">
         <a-space>
-          <a-button @click="$emit('copy')" v-if="!readOnly">
-            <template #icon><CopyOutlined /></template>
-            复制
-          </a-button>
-          <a-button @click="$emit('edit')" v-if="!readOnly" type="primary">
+          <a-button @click="$emit('edit')" type="primary">
             <template #icon><EditOutlined /></template>
             编辑
           </a-button>
-          <a-button @click="$emit('execute')" type="default">
-            <template #icon><PlayCircleOutlined /></template>
-            执行
-          </a-button>
-          <a-popconfirm
-            title="确定要删除这个测试用例吗？"
-            @confirm="$emit('delete')"
-            ok-text="确定"
-            cancel-text="取消"
-            v-if="!readOnly"
-          >
-            <a-button danger>
-              <template #icon><DeleteOutlined /></template>
-              删除
-            </a-button>
-          </a-popconfirm>
         </a-space>
-      </template>
-    </a-page-header>
+      </div>
+    </div>
 
     <a-spin :spinning="loading">
       <div v-if="testCase" class="detail-content">
@@ -84,39 +64,36 @@
 
         <!-- 前置条件 -->
         <a-card title="前置条件" class="info-card">
-          <div class="text-content">
-            {{ testCase.precondition || '无' }}
-          </div>
+          <div class="text-content" v-html="formatPrecondition(testCase.precondition)"></div>
         </a-card>
 
         <!-- 测试步骤 -->
-        <a-card title="测试步骤" class="info-card">
-          <a-steps direction="vertical">
-            <a-step
-              v-for="(step, index) in testCase.steps"
-              :key="index"
-              :title="`步骤 ${step.step}`"
-              :description="null"
-            >
-              <template #description>
-                <div class="step-content">
-                  <div class="step-action">
-                    <strong>操作：</strong>{{ step.action }}
-                  </div>
-                  <div class="step-expected">
-                    <strong>预期结果：</strong>{{ step.expected }}
-                  </div>
-                </div>
-              </template>
-            </a-step>
-          </a-steps>
-        </a-card>
-
-        <!-- 预期结果 -->
-        <a-card title="预期结果" class="info-card">
-          <div class="text-content">
-            {{ testCase.expectedResult || '无特殊说明' }}
+        <a-card title="步骤描述" class="info-card">
+          <div v-if="testCase.steps && testCase.steps.length > 0" class="steps-table-container">
+            <table class="steps-table">
+              <thead>
+                <tr>
+                  <th class="sequence-col">序号</th>
+                  <th class="action-col">用例步骤</th>
+                  <th class="expected-col">预期结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(step, index) in testCase.steps" :key="index">
+                  <td class="sequence-col">
+                    <div class="step-sequence">{{ index + 1 }}</div>
+                  </td>
+                  <td class="action-col">
+                    <div class="step-text">{{ step.action || '无' }}</div>
+                  </td>
+                  <td class="expected-col">
+                    <div class="step-text">{{ step.expected || '无' }}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          <a-empty v-else description="暂无测试步骤" :image="false" />
         </a-card>
 
         <!-- 需求关联 -->
@@ -184,7 +161,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   EditOutlined,
@@ -198,6 +174,7 @@ import dayjs from 'dayjs'
 
 interface Props {
   caseId: string
+  projectId: string
   readOnly?: boolean
 }
 
@@ -213,7 +190,6 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
-const router = useRouter()
 
 const loading = ref(false)
 const testCase = ref<TestCase | null>(null)
@@ -221,17 +197,11 @@ const attachments = ref<CaseAttachment[]>([])
 const executions = ref<TestExecution[]>([])
 
 const fetchCaseDetail = async () => {
-  if (!props.caseId) return
+  if (!props.caseId || !props.projectId) return
 
   loading.value = true
   try {
-    // 从路由参数获取项目ID
-    const projectId = router.currentRoute.value.params.projectId as string
-    if (!projectId) {
-      message.error('项目ID不存在')
-      return
-    }
-    const response = await testCaseApi.getTestCase(projectId, props.caseId)
+    const response = await testCaseApi.getTestCase(props.projectId, props.caseId)
     testCase.value = response
     
     // TODO: 获取附件和执行历史数据
@@ -247,9 +217,6 @@ const fetchCaseDetail = async () => {
   }
 }
 
-const handleBack = () => {
-  router.go(-1)
-}
 
 const getTypeColor = (type: string) => {
   const colors = {
@@ -364,6 +331,13 @@ const formatFileSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const formatPrecondition = (text: string | null | undefined) => {
+  if (!text) return '无'
+  // 简单的URL识别和格式化
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  return text.replace(urlRegex, '<a href="$1" target="_blank" style="color: #1890ff;">$1</a>')
+}
+
 const downloadAttachment = (attachment: CaseAttachment) => {
   // 实现文件下载逻辑
   message.info('下载功能开发中...')
@@ -394,12 +368,48 @@ onMounted(() => {
 <style scoped>
 .test-case-detail {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.sub-title {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
 }
 
 .detail-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 16px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
 }
 
 .info-card {
@@ -412,25 +422,73 @@ onMounted(() => {
   white-space: pre-wrap;
 }
 
-.step-content {
-  background: #fafafa;
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 8px;
+.steps-table-container {
+  overflow-x: auto;
 }
 
-.step-action {
-  margin-bottom: 8px;
+.steps-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #f0f0f0;
 }
 
-.step-expected {
-  color: #595959;
+.steps-table thead {
+  background-color: #fafafa;
 }
 
-:deep(.ant-page-header) {
-  padding: 16px 0;
+.steps-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.85);
   border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 16px;
+}
+
+.steps-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+
+.steps-table tbody tr:hover {
+  background-color: #fafafa;
+}
+
+.steps-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sequence-col {
+  width: 100px;
+  text-align: center;
+}
+
+.action-col {
+  width: 40%;
+}
+
+.expected-col {
+  width: 40%;
+}
+
+.step-sequence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.step-text {
+  line-height: 1.6;
+  color: #262626;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 :deep(.ant-descriptions-item-label) {

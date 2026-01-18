@@ -122,7 +122,7 @@
               <a-select-option value="all">全部数据</a-select-option>
               <a-select-option value="my">我的数据</a-select-option>
             </a-select>
-            <a-button @click="showFilterPanel = !showFilterPanel">
+            <a-button @click="filterDrawerVisible = true">
               <template #icon><FilterOutlined /></template>
               筛选
             </a-button>
@@ -165,57 +165,6 @@
           </a-space>
         </div>
 
-        <!-- 筛选面板 -->
-        <a-card v-if="showFilterPanel" size="small" class="filter-panel">
-          <a-row :gutter="16">
-            <a-col :span="6">
-              <a-select
-                v-model:value="filters.level"
-                placeholder="用例等级"
-                style="width: 100%"
-                allow-clear
-              >
-                <a-select-option value="P0">P0</a-select-option>
-                <a-select-option value="P1">P1</a-select-option>
-                <a-select-option value="P2">P2</a-select-option>
-                <a-select-option value="P3">P3</a-select-option>
-              </a-select>
-            </a-col>
-            <a-col :span="6">
-              <a-select
-                v-model:value="filters.reviewResult"
-                placeholder="评审结果"
-                style="width: 100%"
-                allow-clear
-              >
-                <a-select-option value="not_reviewed">未评审</a-select-option>
-                <a-select-option value="passed">已通过</a-select-option>
-                <a-select-option value="rejected">不通过</a-select-option>
-                <a-select-option value="resubmit">重新提审</a-select-option>
-              </a-select>
-            </a-col>
-            <a-col :span="6">
-              <a-select
-                v-model:value="filters.executionResult"
-                placeholder="执行结果"
-                style="width: 100%"
-                allow-clear
-              >
-                <a-select-option value="not_executed">未执行</a-select-option>
-                <a-select-option value="passed">成功</a-select-option>
-                <a-select-option value="failed">失败</a-select-option>
-                <a-select-option value="blocked">阻塞</a-select-option>
-                <a-select-option value="skipped">跳过</a-select-option>
-              </a-select>
-            </a-col>
-            <a-col :span="6">
-              <a-space>
-                <a-button @click="handleFilter">应用</a-button>
-                <a-button @click="resetFilters">重置</a-button>
-              </a-space>
-            </a-col>
-          </a-row>
-        </a-card>
 
         <!-- 表格 -->
         <a-card class="table-card">
@@ -362,24 +311,53 @@
       </a-layout-content>
     </a-layout>
 
-    <!-- 编辑用例对话框 -->
-    <a-modal
+    <!-- 详情抽屉 -->
+    <a-drawer
+      v-model:visible="detailCaseVisible"
+      :title="viewingCaseId ? '用例详情' : ''"
+      width="60%"
+      placement="right"
+      :mask-closable="false"
+      :destroy-on-close="true"
+      :closable="true"
+    >
+      <TestCaseDetail
+        v-if="viewingCaseId"
+        :case-id="viewingCaseId"
+        :project-id="projectId"
+        :read-only="true"
+        @edit="handleEditFromDetail"
+      />
+    </a-drawer>
+
+    <!-- 编辑用例抽屉 -->
+    <a-drawer
       v-model:visible="editCaseVisible"
       :title="editingCaseId ? '编辑用例' : '新建用例'"
-      width="90%"
-      :footer="null"
+      width="60%"
+      placement="right"
       :mask-closable="false"
-      destroy-on-close
+      :destroy-on-close="true"
+      :closable="true"
     >
-            <TestCaseEdit
+      <TestCaseEdit
         :case-id="editingCaseId"
-              :project-id="projectId"
-              :default-module-id="defaultModuleId"
-              @save="handleSaveCase"
+        :project-id="projectId"
+        :default-module-id="defaultModuleId"
+        @save="handleSaveCase"
         @cancel="editCaseVisible = false"
       />
-    </a-modal>
+    </a-drawer>
     
+    <!-- 筛选抽屉 -->
+    <TestCaseFilter
+      v-model:visible="filterDrawerVisible"
+      :available-fields="filterFields"
+      :module-tree-data="moduleTreeData"
+      @apply="handleFilterApply"
+      @reset="handleFilterReset"
+    />
+
     <!-- 导入用例对话框 -->
     <ImportCasesModal
       v-model:visible="importModalVisible"
@@ -408,6 +386,8 @@ import {
   SettingOutlined
 } from '@ant-design/icons-vue'
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'
+import TestCaseDetail from '@/components/TestCase/TestCaseDetail.vue'
+import TestCaseFilter from '@/components/TestCase/TestCaseFilter.vue'
 import ImportCasesModal from '@/components/TestCase/ImportCasesModal.vue'
 import { testCaseApi } from '@/api/testCase'
 import { projectApi } from '@/api/project'
@@ -510,9 +490,120 @@ const selectedRowKeys = ref<string[]>([])
 const searchValue = ref('')
 const viewMode = ref('all')
 const viewLayout = ref<'list' | 'grid'>('list')
-const showFilterPanel = ref(false)
+const filterDrawerVisible = ref(false)
 
-// 筛选条件
+// 高级筛选条件
+const advancedFilters = ref<Array<{
+  field: string
+  operator: string
+  value: any
+}>>([])
+const filterLogic = ref<'and' | 'or'>('and')
+
+// 筛选字段定义（从数据库获取）
+const filterFields = ref<any[]>([])
+
+// 加载筛选字段配置
+const loadFilterFields = async () => {
+  if (!projectId.value) return
+  
+  try {
+    const fields = await testCaseApi.getFilterFields(projectId.value)
+    // 转换后端数据格式为前端需要的格式
+    filterFields.value = fields.map((field: any) => ({
+      key: field.fieldKey,
+      label: field.fieldLabel,
+      type: field.fieldType,
+      operators: field.operators,
+      options: field.options
+    }))
+  } catch (error) {
+    console.error('Failed to load filter fields:', error)
+    // 如果加载失败，使用默认字段
+    filterFields.value = getDefaultFilterFields()
+  }
+}
+
+// 默认筛选字段（作为后备）
+const getDefaultFilterFields = () => [
+  {
+    key: 'id',
+    label: 'ID',
+    type: 'text' as const,
+    operators: ['contains', 'equals', 'not_equals']
+  },
+  {
+    key: 'name',
+    label: '用例名称',
+    type: 'text' as const
+  },
+  {
+    key: 'moduleId',
+    label: '所属模块',
+    type: 'module' as const
+  },
+  {
+    key: 'priority',
+    label: '用例等级',
+    type: 'select' as const,
+    options: [
+      { label: 'P0', value: 'P0' },
+      { label: 'P1', value: 'P1' },
+      { label: 'P2', value: 'P2' },
+      { label: 'P3', value: 'P3' }
+    ]
+  },
+  {
+    key: 'type',
+    label: '用例类型',
+    type: 'select' as const,
+    options: [
+      { label: '功能测试', value: 'functional' },
+      { label: '接口测试', value: 'interface' },
+      { label: 'UI测试', value: 'ui' },
+      { label: '性能测试', value: 'performance' },
+      { label: '安全测试', value: 'security' }
+    ]
+  },
+  {
+    key: 'status',
+    label: '执行结果',
+    type: 'select' as const,
+    options: [
+      { label: '未执行', value: 'not_executed' },
+      { label: '通过', value: 'passed' },
+      { label: '失败', value: 'failed' },
+      { label: '阻塞', value: 'blocked' },
+      { label: '跳过', value: 'skipped' }
+    ]
+  },
+  {
+    key: 'isAutomated',
+    label: '是否自动化',
+    type: 'select' as const,
+    options: [
+      { label: '是', value: true },
+      { label: '否', value: false }
+    ]
+  },
+  {
+    key: 'tags',
+    label: '标签',
+    type: 'tags' as const
+  },
+  {
+    key: 'requirementRef',
+    label: '需求关联',
+    type: 'text' as const
+  },
+  {
+    key: 'precondition',
+    label: '前置条件',
+    type: 'text' as const
+  }
+]
+
+// 旧的筛选条件（保留兼容性）
 const filters = reactive({
   level: undefined as string | undefined,
   reviewResult: undefined as string | undefined,
@@ -731,6 +822,10 @@ const rowSelection = computed(() => ({
   }
 }))
 
+// 详情用例
+const detailCaseVisible = ref(false)
+const viewingCaseId = ref<string>('')
+
 // 编辑用例
 const editCaseVisible = ref(false)
 const editingCaseId = ref<string>('')
@@ -915,12 +1010,87 @@ const loadTestCases = async () => {
       params.moduleIds = moduleIds.join(',')  // 传递逗号分隔的模块 ID 列表
     }
     
+    // 旧版筛选条件（兼容性）
     if (filters.level) {
       params.priority = filters.level
     }
     
     if (filters.executionResult) {
       params.status = filters.executionResult
+    }
+
+    // 高级筛选条件
+    if (advancedFilters.value.length > 0) {
+      // 处理高级筛选条件
+      advancedFilters.value.forEach((condition) => {
+        const { field, operator, value } = condition
+        
+        // 根据字段和操作符构建查询参数
+        switch (field) {
+          case 'id':
+            if (operator === 'contains' && value) {
+              // ID包含多个值，添加到搜索中
+              params.search = params.search 
+                ? `${params.search} ${value}` 
+                : value
+            } else if (operator === 'equals' && value) {
+              params.case_id = value
+            }
+            break
+          case 'name':
+            if (operator === 'contains' && value) {
+              params.search = params.search 
+                ? `${params.search} ${value}` 
+                : value
+            }
+            break
+          case 'moduleId':
+            if (operator === 'belongs_to' && value) {
+              const moduleIds = Array.isArray(value) ? value : [value]
+              const allModuleIds: string[] = []
+              moduleIds.forEach((id: string) => {
+                allModuleIds.push(...getModuleAndChildrenIds(id))
+              })
+              // 合并到现有的moduleIds
+              if (params.moduleIds) {
+                const existingIds = params.moduleIds.split(',')
+                params.moduleIds = [...new Set([...existingIds, ...allModuleIds])].join(',')
+              } else {
+                params.moduleIds = [...new Set(allModuleIds)].join(',')
+              }
+            }
+            break
+          case 'priority':
+            if (operator === 'equals' && value) {
+              params.priority = value
+            } else if (operator === 'in' && Array.isArray(value) && value.length > 0) {
+              // 多个优先级，取第一个（API可能不支持多值）
+              params.priority = value[0]
+            }
+            break
+          case 'type':
+            if (operator === 'equals' && value) {
+              params.type = value
+            }
+            break
+          case 'status':
+            if (operator === 'equals' && value) {
+              params.status = value
+            }
+            break
+          case 'isAutomated':
+            if (operator === 'equals' && value !== undefined) {
+              params.is_automated = value
+            }
+            break
+          case 'tags':
+            if (operator === 'contains' && value) {
+              const tags = Array.isArray(value) ? value : [value]
+              params.tags = tags.join(',')
+            }
+            break
+        }
+      })
     }
 
     const response = await testCaseApi.getTestCases(projectId.value, params)
@@ -996,7 +1166,26 @@ const handleSearch = () => {
   loadTestCases()
 }
 
-// 处理筛选
+// 应用高级筛选
+const handleFilterApply = (conditions: any[], logic: string) => {
+  advancedFilters.value = conditions
+  filterLogic.value = logic as 'and' | 'or'
+  pagination.current = 1
+  loadTestCases()
+}
+
+// 重置筛选
+const handleFilterReset = () => {
+  advancedFilters.value = []
+  filterLogic.value = 'and'
+  filters.level = undefined
+  filters.reviewResult = undefined
+  filters.executionResult = undefined
+  pagination.current = 1
+  loadTestCases()
+}
+
+// 处理筛选（兼容旧代码）
 const handleFilter = () => {
   pagination.current = 1
   loadTestCases()
@@ -1032,16 +1221,26 @@ const handleEditCase = (record: TestCase) => {
   editCaseVisible.value = true
 }
 
-// 查看用例
+// 查看用例（打开详情页面）
 const handleViewCase = (record: TestCase) => {
-  // 打开用例编辑弹窗（不跳转路由，避免 404）
-  editingCaseId.value = record.id
+  viewingCaseId.value = record.id
+  detailCaseVisible.value = true
+}
+
+// 从详情页面跳转到编辑页面
+const handleEditFromDetail = () => {
+  detailCaseVisible.value = false
+  editingCaseId.value = viewingCaseId.value
   editCaseVisible.value = true
 }
 
 // 保存用例
 const handleSaveCase = async (caseData: any) => {
   editCaseVisible.value = false
+  // 如果详情页面打开着，刷新详情数据
+  if (detailCaseVisible.value && viewingCaseId.value === caseData.id) {
+    // 详情组件会自动刷新
+  }
   await loadTestCases()
   await loadModuleTree()
 }
@@ -1748,6 +1947,7 @@ watch(
     if (projectId.value) {
       loadTestCases()
       loadModuleTree()
+      loadFilterFields()
     }
   },
   { immediate: true }
@@ -1770,6 +1970,7 @@ onMounted(() => {
   if (projectId.value) {
     loadTestCases()
     loadModuleTree()
+    loadFilterFields()
   }
   // 添加全局键盘事件监听器
   window.addEventListener('keydown', handleKeyDown)

@@ -75,7 +75,7 @@ async def get_overview_stats(
             data=result_data
         )
     except Exception as e:
-        logger.error(f"获取概览统计失败: {e}")
+        logger.exception("获取概览统计失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -140,7 +140,7 @@ async def get_trends(
             }
         )
     except Exception as e:
-        logger.error(f"获取趋势数据失败: {e}")
+        logger.exception("获取趋势数据失败")
         # 返回空数据
         return APIResponse(
             status=ResponseStatus.SUCCESS,
@@ -209,7 +209,7 @@ async def get_status_distribution(
             data=data
         )
     except Exception as e:
-        logger.error(f"获取状态分布失败: {e}")
+        logger.exception("获取状态分布失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -271,7 +271,7 @@ async def get_execution_analysis(
             }
         )
     except Exception as e:
-        logger.error(f"获取执行分析失败: {e}")
+        logger.exception("获取执行分析失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -347,7 +347,7 @@ async def get_recent_activities(
             data=activities[:limit]
         )
     except Exception as e:
-        logger.error(f"获取最近活动失败: {e}")
+        logger.exception("获取最近活动失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -453,7 +453,7 @@ async def get_project_stats(
             }
         )
     except Exception as e:
-        logger.error(f"获取项目统计失败: {e}")
+        logger.exception("获取项目统计失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",

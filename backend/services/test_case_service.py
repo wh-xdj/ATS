@@ -118,7 +118,6 @@ class TestCaseService:
             priority=case_data.priority,
             precondition=case_data.precondition,
             steps=case_data.steps or [],
-            expected_result=case_data.expected_result,
             requirement_ref=case_data.requirement_ref,
             module_path=case_data.module_path,
             level=case_data.level or case_data.priority,  # level默认使用priority

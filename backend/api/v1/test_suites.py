@@ -38,7 +38,10 @@ async def get_test_suites(
                 "limit": result["limit"]
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("获取测试套列表失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取测试套列表失败: {str(e)}"
@@ -87,12 +90,15 @@ async def create_test_suite(
             message="创建成功",
             data=serialize_model(suite, camel_case=True)
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        logger.exception("创建测试套失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"创建测试套失败: {str(e)}"
@@ -130,12 +136,15 @@ async def update_test_suite(
             message="更新成功",
             data=serialize_model(suite, camel_case=True)
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        logger.exception("更新测试套失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"更新测试套失败: {str(e)}"
@@ -297,12 +306,15 @@ async def execute_test_suite(
                 message="任务已加入队列，等待执行",
                 data=serialize_model(suite, camel_case=True)
             )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        logger.exception("执行测试套失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"执行测试套失败: {str(e)}"
@@ -489,6 +501,7 @@ async def cancel_test_suite(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("取消测试套失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"取消测试套失败: {str(e)}"
@@ -535,7 +548,10 @@ async def get_suite_executions(
                 "limit": result["limit"]
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("获取执行记录失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行记录失败: {str(e)}"
@@ -952,7 +968,7 @@ async def get_suite_suite_executions(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"获取测试套执行历史失败: {e}")
+        logger.exception("获取测试套执行历史失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行历史失败: {str(e)}"
@@ -1050,7 +1066,7 @@ async def delete_suite_execution(
         raise
     except Exception as e:
         db.rollback()
-        logger.exception(f"删除测试套执行历史失败: {e}")
+        logger.exception("删除测试套执行历史失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"删除失败: {str(e)}"

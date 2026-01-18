@@ -13,6 +13,7 @@ from api.deps import get_current_user
 from models import User
 from utils.serializer import serialize_model, serialize_list
 from services.module_service import ModuleService
+from core.logger import logger
 import uuid
 
 router = APIRouter()
@@ -216,8 +217,9 @@ async def create_module(
             message="创建成功",
             data=serialize_model(module, camel_case=True)
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        from core.logger import logger
         logger.exception("创建模块失败")
         raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
 
@@ -520,7 +522,6 @@ async def export_test_cases(
                 "用例类型": case.type or "",
                 "前置条件": case.precondition or "",
                 "测试步骤": steps_text,
-                "期望结果": case.expected_result or "",
             })
         
         # 创建内存中的Excel文件
@@ -567,10 +568,12 @@ async def export_test_cases(
             # 确保临时文件被删除
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+            logger.exception("导出测试用例文件处理失败")
             raise e
             
+    except HTTPException:
+        raise
     except Exception as e:
-        from core.logger import logger
         logger.exception("导出测试用例失败")
         raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
 
@@ -650,10 +653,12 @@ async def download_case_template(
             # 确保临时文件被删除
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+            logger.exception("下载模板文件处理失败")
             raise e
             
+    except HTTPException:
+        raise
     except Exception as e:
-        from core.logger import logger
         logger.exception("下载模板失败")
         raise HTTPException(status_code=500, detail=f"下载模板失败: {str(e)}")
 
@@ -855,10 +860,6 @@ async def import_test_cases(
             if '前置条件' in df.columns and not pd.isna(row.get('前置条件')):
                 precondition = str(row['前置条件']).strip() or None
             
-            expected_result = None
-            if '期望结果' in df.columns and not pd.isna(row.get('期望结果')):
-                expected_result = str(row['期望结果']).strip() or None
-            
             is_automated = False
             if '是否自动化' in df.columns and not pd.isna(row.get('是否自动化')):
                 automated_val = str(row['是否自动化']).strip()
@@ -911,7 +912,6 @@ async def import_test_cases(
                         'module_id': module_id,
                         'precondition': precondition,
                         'steps': steps,
-                        'expected_result': expected_result,
                         'tags': tags,
                         'is_automated': is_automated,
                     }
@@ -1005,7 +1005,6 @@ async def import_test_cases(
                         priority=item['data']['priority'],
                         precondition=item['data']['precondition'],
                         steps=item['data']['steps'] or [],
-                        expected_result=item['data']['expected_result'],
                         tags=item['data']['tags'],
                         status=item['data']['status'],
                         is_automated=item['data']['is_automated'],
@@ -1024,7 +1023,6 @@ async def import_test_cases(
                     existing_case.module_id = item['data']['module_id']
                     existing_case.precondition = item['data']['precondition']
                     existing_case.steps = item['data']['steps'] or []
-                    existing_case.expected_result = item['data']['expected_result']
                     existing_case.tags = item['data']['tags']
                     existing_case.is_automated = item['data']['is_automated']
                     existing_case.updated_by = str(current_user.id)
@@ -1051,9 +1049,11 @@ async def import_test_cases(
                 }
             )
             
+        except HTTPException:
+            db.rollback()
+            raise
         except Exception as e:
             db.rollback()
-            from core.logger import logger
             logger.exception("导入用例失败")
             raise HTTPException(status_code=500, detail=f"导入失败: {str(e)}")
     
@@ -1085,7 +1085,6 @@ async def get_test_case(
             {"step": 1, "action": "打开登录页面", "expected": "页面正常显示"},
             {"step": 2, "action": "输入用户名和密码", "expected": "输入成功"}
         ],
-        "expectedResult": "登录成功",
         "requirementRef": "REQ-001",
         "status": "not_executed",
         "tags": ["回归", "冒烟"],
@@ -1125,7 +1124,6 @@ async def create_test_case(
             "priority": case_data.priority,
             "precondition": case_data.precondition,
             "steps": case_data.steps,
-            "expectedResult": case_data.expected_result,
             "requirementRef": case_data.requirement_ref,
             "tags": case_data.tags or [],
             "status": "not_executed",

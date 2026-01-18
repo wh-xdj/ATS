@@ -349,7 +349,6 @@ class TestPlanService:
                 'projectId': case.project_id,  # 添加项目ID，用于加载模块列表
                 'precondition': getattr(case, 'precondition', None),  # TestCase 使用 precondition（单数）
                 'steps': case.steps,
-                'expectedResult': case.expected_result,
                 'status': case.status,
                 'tags': case.tags if hasattr(case, 'tags') and case.tags else [],
                 'createdBy': case.created_by,

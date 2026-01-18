@@ -557,8 +557,10 @@ async def get_environment_suite_executions(
                 "limit": limit
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"获取环境测试套执行历史失败: {e}")
+        logger.exception("获取环境测试套执行历史失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行历史失败: {str(e)}"
@@ -579,8 +581,10 @@ async def get_queue_status(
             message="获取成功",
             data=queue_status
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"获取队列状态失败: {e}")
+        logger.exception("获取队列状态失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取队列状态失败: {str(e)}"
@@ -610,8 +614,10 @@ async def get_queue_tasks(
             message="获取成功",
             data=tasks
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"获取队列任务失败: {e}")
+        logger.exception("获取队列任务失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取队列任务失败: {str(e)}"

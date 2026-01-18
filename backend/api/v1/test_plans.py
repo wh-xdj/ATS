@@ -98,7 +98,7 @@ async def get_test_plans(
                     "skip": sum(1 for case in cases if case.get("executionStatus") == "skip")
                 }
             except Exception as e:
-                logger.error(f"获取计划 {plan_id} 的用例失败: {e}")
+                logger.exception(f"获取计划 {plan_id} 的用例失败")
                 item["totalCases"] = 0
                 item["executedCases"] = 0
                 item["caseStatusCounts"] = {
@@ -128,10 +128,7 @@ async def get_test_plans(
             data=response_data,
         )
     except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        logger.error(f"获取测试计划列表失败: {e}")
-        logger.error(f"错误详情: {error_detail}")
+        logger.exception("获取测试计划列表失败")
         return APIResponse(
             status=ResponseStatus.SUCCESS,
             message="获取成功",
@@ -228,10 +225,7 @@ async def create_test_plan(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        logger.error(f"创建测试计划失败: {e}")
-        logger.error(f"错误详情: {error_detail}")
+        logger.exception("创建测试计划失败")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"创建失败: {str(e)}")
 
 
@@ -284,7 +278,7 @@ async def update_test_plan(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新测试计划失败: {e}")
+        logger.exception("更新测试计划失败")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"更新失败: {str(e)}")
 
 

@@ -19,7 +19,6 @@ class TestCase(Base, BaseModel):
     priority = Column(String(20), default="P2", nullable=False, index=True)  # P0, P1, P2, P3
     precondition = Column(Text)
     steps = Column(JSON, nullable=False)  # 结构化步骤存储
-    expected_result = Column(Text)
     requirement_ref = Column(String(255))
     module_path = Column(String(500))
     level = Column(String(20))  # P0/P1/P2/P3

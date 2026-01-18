@@ -20,7 +20,6 @@ class TestCaseBase(BaseModel):
     priority: str = "P2"  # P0, P1, P2, P3
     precondition: Optional[str] = None
     steps: Optional[List[Dict[str, Any]]] = None  # JSONB格式，默认为None，在服务层处理
-    expected_result: Optional[str] = None
     requirement_ref: Optional[str] = None
     module_path: Optional[str] = None
     level: Optional[str] = None
@@ -105,7 +104,6 @@ class TestCaseUpdate(BaseModel):
     priority: Optional[str] = None
     precondition: Optional[str] = None
     steps: Optional[List[Dict[str, Any]]] = None
-    expected_result: Optional[str] = None
     status: Optional[str] = None
     tags: Optional[List[str]] = None
     module_id: Optional[str] = None  # 支持移动用例到不同模块

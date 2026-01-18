@@ -5,6 +5,7 @@ from .user import User
 from .project import Project, ProjectMember
 from .module import Module
 from .test_case import TestCase, CaseAttachment
+from .filter_field import FilterField
 from .test_plan import TestPlan, PlanCaseRelation
 from .test_execution import TestExecution, ExecutionAttachment
 from .test_suite import TestSuite, TestSuiteExecution, TestSuiteLog
@@ -21,6 +22,7 @@ __all__ = [
     "Module",
     "TestCase",
     "CaseAttachment",
+    "FilterField",
     "TestPlan",
     "PlanCaseRelation",
     "TestExecution",

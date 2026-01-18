@@ -5,8 +5,9 @@ from core.logger import logger
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi import WebSocket, WebSocketDisconnect
+import traceback
 from config import settings
 from database import engine, Base, SessionLocal
 from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace, test_suites
@@ -83,6 +84,7 @@ app.add_middleware(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证错误，返回详细的错误信息"""
+    logger.exception(f"请求验证失败: {request.method} {request.url}")
     errors = []
     for error in exc.errors():
         field = " -> ".join(str(loc) for loc in error["loc"])
@@ -101,7 +103,37 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "errors": errors,
             "detail": str(exc)
         }
-)
+    )
+
+
+# 添加全局异常处理器，捕获所有未处理的异常
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """全局异常处理器，捕获所有未处理的异常"""
+    # 记录异常详细信息
+    logger.exception(f"未处理的异常: {request.method} {request.url}")
+    
+    # 如果是 HTTPException，直接返回
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "status": "error",
+                "message": exc.detail,
+            }
+        )
+    
+    # 对于其他异常，返回通用错误信息
+    # 在生产环境中，不暴露详细的错误信息
+    error_detail = str(exc) if settings.ENVIRONMENT == "development" else "服务器内部错误"
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "status": "error",
+            "message": error_detail,
+        }
+    )
 
 # 注册路由
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["认证"])

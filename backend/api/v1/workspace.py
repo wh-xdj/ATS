@@ -157,6 +157,7 @@ async def list_workspace_files(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("获取文件列表失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取文件列表失败: {str(e)}"
@@ -200,6 +201,7 @@ async def read_workspace_file(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("读取文件失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"读取文件失败: {str(e)}"
@@ -242,6 +244,7 @@ async def delete_workspace_file(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("删除失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"删除失败: {str(e)}"
@@ -284,6 +287,7 @@ async def create_workspace_directory(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("创建文件夹失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"创建文件夹失败: {str(e)}"

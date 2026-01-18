@@ -62,7 +62,6 @@ def import_test_cases_task(project_id: str, file_path: str, user_id: str) -> Dic
                         "priority": str(row.get('priority', 'medium')),
                         "precondition": str(row.get('precondition', '')) if not pd.isna(row.get('precondition')) else None,
                         "steps": row.get('steps', []),
-                        "expected_result": str(row.get('expected_result', '')) if not pd.isna(row.get('expected_result')) else None,
                         "created_by": UUID(user_id),
                         "status": "not_executed"
                     }
@@ -125,7 +124,6 @@ def export_test_cases_task(project_id: str, filters: Dict[str, Any]) -> str:
                 "优先级": case.priority,
                 "前置条件": case.precondition or "",
                 "测试步骤": steps_text,
-                "期望结果": case.expected_result or "",
                 "模块路径": case.module_path or "",
                 "标签": tags_text,
                 "状态": case.status

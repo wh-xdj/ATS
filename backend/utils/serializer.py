@@ -38,20 +38,38 @@ def serialize_model(model: Any, camel_case: bool = True) -> Dict[str, Any]:
     
     result = {}
     
-    # 获取模型的所有列
-    for column in model.__table__.columns:
-        value = getattr(model, column.name)
-        
-        # 处理datetime类型
-        if isinstance(value, datetime):
-            value = value.isoformat()
-        # 处理date类型
-        elif isinstance(value, date):
-            value = value.isoformat()
-        
-        # 转换字段名
-        key = to_camel_case(column.name) if camel_case else column.name
-        result[key] = value
+    try:
+        # 获取模型的所有列
+        for column in model.__table__.columns:
+            try:
+                value = getattr(model, column.name, None)
+                
+                # 处理None值
+                if value is None:
+                    result[to_camel_case(column.name) if camel_case else column.name] = None
+                    continue
+                
+                # 处理datetime类型
+                if isinstance(value, datetime):
+                    value = value.isoformat()
+                # 处理date类型
+                elif isinstance(value, date):
+                    value = value.isoformat()
+                # JSON字段已经是字典或列表，直接使用
+                # UUID类型转换为字符串
+                elif hasattr(value, '__str__') and not isinstance(value, (str, int, float, bool, list, dict)):
+                    value = str(value)
+                
+                # 转换字段名
+                key = to_camel_case(column.name) if camel_case else column.name
+                result[key] = value
+            except Exception as e:
+                # 如果某个字段序列化失败，记录错误但继续处理其他字段
+                print(f"Warning: Failed to serialize field {column.name}: {e}")
+                continue
+    except Exception as e:
+        print(f"Error serializing model: {e}")
+        raise
     
     return result
 

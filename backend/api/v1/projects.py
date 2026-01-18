@@ -22,12 +22,35 @@ router = APIRouter()
 @router.get("", response_model=APIResponse)
 async def get_projects(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    page: int = 1,
+    size: int = 20,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
 ):
-    """获取项目列表（使用数据库持久化）"""
+    """获取项目列表（使用数据库持久化，支持分页）"""
     # 查询所有项目，按创建时间倒序
     query = db.query(Project).order_by(Project.created_at.desc())
-    items = query.all()
+    
+    # 搜索条件
+    if search:
+        query = query.filter(
+            or_(
+                Project.name.contains(search),
+                Project.description.contains(search)
+            )
+        )
+    
+    # 状态过滤
+    if status:
+        query = query.filter(Project.status == status)
+    
+    # 总数
+    total = query.count()
+    
+    # 分页
+    offset = (page - 1) * size
+    items = query.offset(offset).limit(size).all()
 
     # 获取所有相关的用户ID
     user_ids = set()
@@ -50,10 +73,21 @@ async def get_projects(
         project_data['updatedByName'] = user_map.get(item.owner_id, user_map.get(item.created_by, 'Unknown'))
         project_list.append(project_data)
     
+    # 计算总页数
+    pages = (total + size - 1) // size if total > 0 else 0
+    
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=project_list,
+        data={
+            "items": project_list,
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": pages,
+            "hasNext": page < pages,
+            "hasPrev": page > 1,
+        },
     )
 
 

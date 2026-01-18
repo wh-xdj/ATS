@@ -14,10 +14,34 @@ class EnvironmentService:
     """环境服务类"""
     
     @staticmethod
-    def get_environments(db: Session, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_environments(
+        db: Session, 
+        skip: int = 0, 
+        limit: int = 100,
+        search: Optional[str] = None,
+        status: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
         """获取环境列表"""
         from services.task_queue_service import TaskQueueService
-        environments = db.query(Environment).offset(skip).limit(limit).all()
+        from sqlalchemy import or_
+        
+        query = db.query(Environment)
+        
+        # 搜索条件
+        if search:
+            query = query.filter(
+                or_(
+                    Environment.name.contains(search),
+                    Environment.host.contains(search),
+                    Environment.description.contains(search)
+                )
+            )
+        
+        # 状态过滤
+        if status is not None:
+            query = query.filter(Environment.status == status)
+        
+        environments = query.order_by(Environment.created_at.desc()).offset(skip).limit(limit).all()
         result = []
         for env in environments:
             # 实时检查心跳时间，更新在线状态
@@ -29,6 +53,33 @@ class EnvironmentService:
             env_dict["isBusy"] = running_count > 0
             result.append(env_dict)
         return result
+    
+    @staticmethod
+    def get_environments_count(
+        db: Session,
+        search: Optional[str] = None,
+        status: Optional[bool] = None,
+    ) -> int:
+        """获取环境总数"""
+        from sqlalchemy import or_
+        
+        query = db.query(Environment)
+        
+        # 搜索条件
+        if search:
+            query = query.filter(
+                or_(
+                    Environment.name.contains(search),
+                    Environment.host.contains(search),
+                    Environment.description.contains(search)
+                )
+            )
+        
+        # 状态过滤
+        if status is not None:
+            query = query.filter(Environment.status == status)
+        
+        return query.count()
     
     @staticmethod
     def get_environment(db: Session, environment_id: str) -> Optional[Dict[str, Any]]:

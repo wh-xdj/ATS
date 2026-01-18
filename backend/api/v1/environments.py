@@ -21,16 +21,37 @@ router = APIRouter()
 async def get_environments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    skip: int = 0,
-    limit: int = 100
+    page: int = 1,
+    size: int = 20,
+    search: Optional[str] = None,
+    status: Optional[bool] = None,
 ):
-    """获取环境列表（节点列表）"""
-    environments = EnvironmentService.get_environments(db, skip=skip, limit=limit)
+    """获取环境列表（节点列表，支持分页）"""
+    # 计算 skip 和 limit
+    skip = (page - 1) * size
+    limit = size
+    
+    # 获取环境列表
+    environments = EnvironmentService.get_environments(db, skip=skip, limit=limit, search=search, status=status)
+    
+    # 获取总数
+    total = EnvironmentService.get_environments_count(db, search=search, status=status)
+    
+    # 计算总页数
+    pages = (total + size - 1) // size if total > 0 else 0
     
     return APIResponse(
         status=ResponseStatus.SUCCESS,
         message="获取成功",
-        data=environments
+        data={
+            "items": environments,
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": pages,
+            "hasNext": page < pages,
+            "hasPrev": page > 1,
+        }
     )
 
 

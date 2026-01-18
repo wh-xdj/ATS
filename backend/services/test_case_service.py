@@ -25,8 +25,13 @@ class TestCaseService:
         status: Optional[str] = None,
         priority: Optional[str] = None,
         type: Optional[str] = None,
+        tags: Optional[str] = None,  # 标签筛选（逗号分隔）
+        is_automated: Optional[bool] = None,  # 是否自动化
+        requirement_ref: Optional[str] = None,  # 需求关联
+        precondition: Optional[str] = None,  # 前置条件
     ):
         """获取测试用例列表"""
+        from sqlalchemy import JSON
         query = db.query(TestCase).filter(TestCase.project_id == project_id)
 
         # 搜索条件
@@ -62,6 +67,34 @@ class TestCaseService:
         # 类型过滤
         if type:
             query = query.filter(TestCase.type == type)
+
+        # 标签过滤
+        if tags:
+            tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+            if tag_list:
+                # tags 是 JSON 字段，需要检查是否包含指定的标签
+                # 使用 JSON_CONTAINS (MySQL) 函数
+                from sqlalchemy import text
+                
+                # 对于每个标签，检查 tags JSON 字段是否包含该标签
+                for tag in tag_list:
+                    # MySQL JSON_CONTAINS 函数: JSON_CONTAINS(tags, '"tag_value"')
+                    tag_json = f'"{tag}"'
+                    query = query.filter(
+                        text("JSON_CONTAINS(tags, :tag_json)")
+                    ).params(tag_json=tag_json)
+
+        # 是否自动化过滤
+        if is_automated is not None:
+            query = query.filter(TestCase.is_automated == is_automated)
+
+        # 需求关联过滤
+        if requirement_ref:
+            query = query.filter(TestCase.requirement_ref.contains(requirement_ref))
+
+        # 前置条件过滤
+        if precondition:
+            query = query.filter(TestCase.precondition.contains(precondition))
 
         # 总数
         total = query.count()

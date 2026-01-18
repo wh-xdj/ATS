@@ -30,6 +30,10 @@ async def get_test_cases(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     type: Optional[str] = None,
+    tags: Optional[str] = None,  # 标签筛选（逗号分隔）
+    is_automated: Optional[bool] = None,  # 是否自动化
+    requirement_ref: Optional[str] = None,  # 需求关联
+    precondition: Optional[str] = None,  # 前置条件
 ):
     """获取测试用例列表（按项目过滤，使用数据库持久化）"""
     try:
@@ -44,6 +48,10 @@ async def get_test_cases(
             status=status,
             priority=priority,
             type=type,
+            tags=tags,
+            is_automated=is_automated,
+            requirement_ref=requirement_ref,
+            precondition=precondition,
         )
 
         # 序列化items为camelCase

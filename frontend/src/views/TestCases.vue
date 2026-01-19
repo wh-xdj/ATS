@@ -109,7 +109,7 @@
             <a-input-search
               v-model:value="searchValue"
               placeholder="通过ID/名称/标签搜索"
-              style="width: 260px"
+              style="width: 200px"
               @search="handleSearch"
               allow-clear
             />
@@ -418,11 +418,11 @@ const userStore = useUserStore()
 
 // 当前项目 ID：优先使用 store，其次使用已有项目列表的第一个
 const projects = computed<Project[]>(() => projectStore.projects)
-const projectId = computed<string | undefined>(() => {
+const projectId = computed<string>(() => {
   if (projectStore.currentProject) {
     return projectStore.currentProject.id
   }
-  return projects.value[0]?.id
+  return projects.value[0]?.id || ''
 })
 
 // 页面内部的项目下拉（示例项目选择）

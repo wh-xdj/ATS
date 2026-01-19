@@ -138,27 +138,16 @@
         <!-- 测试步骤卡片 -->
         <a-card title="测试步骤" class="info-card">
           <div class="steps-container">
-            <div v-if="formData.steps.length > 0" class="steps-table-wrapper">
+              <div v-if="formData.steps.length > 0" class="steps-table-wrapper">
               <div class="steps-table-header">
-                <div class="drag-col"></div>
                 <div class="sequence-col">序号</div>
                 <div class="action-col">用例步骤</div>
                 <div class="expected-col">预期结果</div>
                 <div class="operations-col">操作</div>
               </div>
-              <VueDraggable
-                v-model="formData.steps"
-                handle=".drag-handle"
-                item-key="id"
-                class="steps-list"
-                animation="200"
-                @end="handleDragEnd"
-              >
-                <template #item="{ element, index }">
+              <div class="steps-list">
+                <template v-for="(element, index) in formData.steps" :key="element.id || index">
                   <div class="step-row">
-                    <div class="drag-col">
-                      <HolderOutlined class="drag-handle" />
-                    </div>
                     <div class="sequence-col">
                       <div class="step-sequence">{{ index + 1 }}</div>
                     </div>
@@ -210,7 +199,7 @@
                     </div>
                   </div>
                 </template>
-              </VueDraggable>
+              </div>
             </div>
             <a-empty
               v-else
@@ -344,7 +333,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
-import { VueDraggable } from 'vue-draggable-plus'
 import {
   SaveOutlined,
   PlusOutlined,
@@ -355,8 +343,7 @@ import {
   PaperClipOutlined,
   ImportOutlined,
   MoreOutlined,
-  CopyOutlined,
-  HolderOutlined
+  CopyOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
@@ -445,43 +432,27 @@ const formRules: Record<string, Rule[]> = {
   type: [{ required: true, message: '请选择用例类型', trigger: 'change' }],
   priority: [{ required: true, message: '请选择优先级', trigger: 'change' }]
 }
-
-// 方法
 const loadTestCase = async () => {
   if (!props.caseId) {
-    // 新建用例，不需要加载数据
-    loading.value = false
-    return
-  }
-
-  if (!props.projectId) {
-    console.error('Project ID is missing')
-    message.error('项目ID缺失，无法加载用例')
+    console.log('新建用例，不需要加载数据')
     loading.value = false
     return
   }
 
   loading.value = true
-  
-  // 添加超时保护
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('加载超时，请检查网络连接')), 30000) // 30秒超时
-  })
-  
+  console.log('开始加载用例数据，loading 已设置为 true')
+
   try {
     console.log('Loading test case:', { caseId: props.caseId, projectId: props.projectId })
-    const data = await Promise.race([
-      testCaseApi.getTestCase(props.projectId, props.caseId),
-      timeoutPromise
-    ]) as any
+    const data = await testCaseApi.getTestCase(props.projectId, props.caseId)
     console.log('Test case loaded:', data)
-    
+
     if (!data) {
       throw new Error('用例数据为空')
     }
-    
+
     Object.assign(testCase, data)
-    
+
     // 填充表单数据（处理字段名映射：后端可能返回下划线格式）
     formData.name = data.name || ''
     formData.type = data.type || 'functional'
@@ -496,20 +467,18 @@ const loadTestCase = async () => {
       id: step.id || `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
     }))
     formData.isAutomated = data.isAutomated ?? data.is_automated ?? false
-    
+
     // 更新步骤编号
     updateStepNumber()
+
+    console.log('用例数据加载完成')
   } catch (error: any) {
     console.error('Failed to load test case:', error)
     const errorMessage = error?.response?.data?.message || error?.message || '加载用例失败'
     message.error(errorMessage)
-    // 即使加载失败，也要关闭loading，避免一直转圈
   } finally {
     console.log('loadTestCase finally: 设置 loading.value = false')
     loading.value = false
-    // 使用 nextTick 确保 DOM 更新
-    await nextTick()
-    console.log('loadTestCase: nextTick 完成，loading 状态应该已更新')
   }
 }
 
@@ -518,7 +487,7 @@ const loadModuleTree = async () => {
     console.warn('Project ID is missing, skipping module tree load')
     return
   }
-  
+
   try {
     const response = await projectApi.getModules(props.projectId)
     // API 返回格式可能是 { modules: [...], totalCaseCount: ... } 或直接是数组
@@ -552,10 +521,10 @@ const buildTreeData = (modules: any[]): any[] => {
     if (!moduleId || !treeMap.has(moduleId)) {
       return ''
     }
-    
+
     const pathParts: string[] = []
     let currentId: string | null = moduleId
-    
+
     // 递归向上查找父模块，构建路径
     const visited = new Set<string>() // 防止循环引用
     while (currentId && treeMap.has(currentId) && !visited.has(currentId)) {
@@ -564,7 +533,7 @@ const buildTreeData = (modules: any[]): any[] => {
       pathParts.unshift(moduleNode.name) // 从前面插入，保持顺序
       currentId = moduleNode.parentId || null
     }
-    
+
     return pathParts.join('/')
   }
 
@@ -606,16 +575,16 @@ const handleSave = async () => {
 
   try {
     await formRef.value.validateFields()
-    
+
     saving.value = true
-    
+
     // 转换字段名：前端使用驼峰，后端使用下划线
     // 确保 module_id 如果是空字符串或无效值，转换为 null
     let moduleIdValue: string | null = null
     if (formData.moduleId && formData.moduleId.trim() !== '') {
       moduleIdValue = formData.moduleId.trim()
     }
-    
+
     // 处理steps，确保始终是数组格式
     const processedSteps = (formData.steps && Array.isArray(formData.steps) && formData.steps.length > 0)
       ? formData.steps
@@ -626,7 +595,7 @@ const handleSave = async () => {
             expected: (step.expected || '').trim()
           }))
       : []
-    
+
     const submitData: any = {
       name: formData.name.trim(),
       type: formData.type || 'functional',
@@ -638,7 +607,7 @@ const handleSave = async () => {
       steps: processedSteps,  // 确保始终是数组
       is_automated: formData.isAutomated ?? false
     }
-    
+
     // 移除 undefined 值，但保留 null 值（因为 module_id 等字段需要 null）
     Object.keys(submitData).forEach(key => {
       if (submitData[key] === undefined) {
@@ -756,27 +725,6 @@ const removeStep = (index: number) => {
   updateStepNumber()
 }
 
-
-// 拖拽结束处理
-const handleDragEnd = () => {
-  // 拖拽结束后更新步骤编号
-  updateStepNumber()
-}
-
-const moveStep = (index: number, direction: number) => {
-  const targetIndex = index + direction
-  if (targetIndex < 0 || targetIndex >= formData.steps.length) return
-
-  const temp = formData.steps[index]
-  formData.steps[index] = formData.steps[targetIndex]
-  formData.steps[targetIndex] = temp
-
-  // 重新编号
-  formData.steps.forEach((step, i) => {
-    step.step = i + 1
-  })
-}
-
 const importSteps = () => {
   importModalVisible.value = true
   importFormat.value = 'text'
@@ -788,7 +736,7 @@ const handleImportSteps = () => {
   if (importFormat.value === 'text') {
     const lines = importContent.value.split('\n').filter(line => line.trim())
     const steps: TestCaseStep[] = []
-    
+
     lines.forEach((line, index) => {
       const parts = line.split('|')
       steps.push({
@@ -797,7 +745,7 @@ const handleImportSteps = () => {
         expected: parts[1]?.trim() || ''
       })
     })
-    
+
     formData.steps = steps
   } else {
     const steps = importTableData.value
@@ -807,10 +755,10 @@ const handleImportSteps = () => {
         action: row.action,
         expected: row.expected
       }))
-    
+
     formData.steps = steps
   }
-  
+
   importModalVisible.value = false
   message.success('步骤导入成功')
 }
@@ -828,7 +776,7 @@ const handleImportTableChange = () => {
   importTableData.value = importTableData.value.filter(
     row => row.action.trim() || row.expected.trim()
   )
-  
+
   // 如果最后一行不是空行，添加新行
   const lastRow = importTableData.value[importTableData.value.length - 1]
   if (lastRow && (lastRow.action.trim() || lastRow.expected.trim())) {
@@ -866,7 +814,7 @@ onMounted(async () => {
     loadModuleTree()
     return
   }
-  
+
   // 编辑用例：并行加载用例数据和模块树，提高加载速度
   // 使用 Promise.allSettled 确保即使一个失败，另一个也能完成
   await Promise.allSettled([
@@ -1147,11 +1095,11 @@ defineExpose({
   .test-case-edit {
     padding: 20px;
   }
-  
+
   .info-card :deep(.ant-col) {
     margin-bottom: 20px;
   }
-  
+
   .step-content {
     gap: 12px;
   }
@@ -1161,19 +1109,19 @@ defineExpose({
   .test-case-edit {
     padding: 16px;
   }
-  
+
   .info-card {
     padding: 16px;
   }
-  
+
   .info-card :deep(.ant-col) {
     margin-bottom: 16px;
   }
-  
+
   .form-section {
     margin-bottom: 20px;
   }
-  
+
   .form-section-title {
     font-size: 16px;
     margin-bottom: 12px;
@@ -1184,56 +1132,56 @@ defineExpose({
   .test-case-edit {
     padding: 12px;
   }
-  
+
   .info-card {
     padding: 12px;
     margin-bottom: 12px;
   }
-  
+
   .info-card :deep(.ant-row) {
     gap: 8px;
   }
-  
+
   .info-card :deep(.ant-col) {
     width: 100% !important;
     max-width: 100% !important;
     margin-bottom: 8px;
   }
-  
+
   .form-section {
     margin-bottom: 16px;
   }
-  
+
   .form-section-title {
     font-size: 15px;
     margin-bottom: 10px;
   }
-  
+
   .step-content {
     gap: 8px;
   }
-  
+
   .step-item {
     padding: 8px;
   }
-  
+
   .step-actions {
     gap: 8px;
   }
-  
+
   .attachment-upload {
     padding: 12px;
   }
-  
+
   .attachments-list {
     margin-top: 12px;
   }
-  
+
   .editor-actions {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .editor-actions .ant-btn {
     width: 100%;
   }
@@ -1243,65 +1191,65 @@ defineExpose({
   .test-case-edit {
     padding: 8px;
   }
-  
+
   .info-card {
     padding: 10px;
     margin-bottom: 10px;
   }
-  
+
   .info-card :deep(.ant-row) {
     flex-direction: column;
     gap: 6px;
   }
-  
+
   .info-card :deep(.ant-col) {
     margin-bottom: 6px;
   }
-  
+
   .form-section {
     margin-bottom: 12px;
   }
-  
+
   .form-section-title {
     font-size: 14px;
     margin-bottom: 8px;
     padding-bottom: 4px;
     border-bottom: 1px solid #f0f0f0;
   }
-  
+
   .step-item {
     padding: 6px;
     border: 1px solid #f0f0f0;
     border-radius: 4px;
     margin-bottom: 6px;
   }
-  
+
   .step-actions {
     flex-direction: column;
     gap: 6px;
     margin-top: 8px;
   }
-  
+
   .step-actions .ant-btn {
     width: 100%;
   }
-  
+
   .attachment-upload {
     padding: 10px;
   }
-  
+
   .attachments-list {
     margin-top: 10px;
   }
-  
+
   .editor-actions {
     margin-top: 16px;
   }
-  
+
   .info-card :deep(.ant-form-item-label) {
     font-size: 13px;
   }
-  
+
   .info-card :deep(.ant-input),
   .info-card :deep(.ant-select),
   .info-card :deep(.ant-input-textarea) {

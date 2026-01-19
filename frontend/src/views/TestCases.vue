@@ -16,7 +16,7 @@
         </a-select-option>
       </a-select>
     </div>
-        
+
     <a-layout class="test-cases-layout">
       <!-- 左侧模块树 -->
       <a-layout-sider width="240" class="module-tree-sider">
@@ -26,7 +26,7 @@
           class="module-search"
           @search="handleModuleSearch"
         />
-        
+
         <a-tree
           :tree-data="moduleTreeData"
           :selected-keys="selectedModuleKeys"
@@ -91,34 +91,31 @@
           </a-menu>
         </div>
       </a-layout-sider>
-      
+
       <!-- 右侧主内容区 -->
       <a-layout-content class="cases-content">
         <!-- 固定顶部工具栏 -->
         <div class="fixed-toolbar">
-          <div class="toolbar">
-          <a-space>
+          <a-space class="toolbar">
             <a-button type="primary" @click="handleCreateCase">
-            <template #icon><PlusOutlined /></template>
+              <template #icon><PlusOutlined /></template>
               新建
-          </a-button>
+            </a-button>
             <a-button @click="handleImport">
               <template #icon><ImportOutlined /></template>
               导入
             </a-button>
-          </a-space>
-          
-          <a-space>
+            <a-divider type="vertical" />
             <a-input-search
               v-model:value="searchValue"
               placeholder="通过ID/名称/标签搜索"
-              style="width: 300px"
+              style="width: 260px"
               @search="handleSearch"
               allow-clear
             />
             <a-select
               v-model:value="viewMode"
-              style="width: 120px"
+              style="width: 100px"
             >
               <a-select-option value="all">全部数据</a-select-option>
               <a-select-option value="my">我的数据</a-select-option>
@@ -156,7 +153,7 @@
                     <a-button size="small" @click="resetColumnSettings">重置</a-button>
                     <a-button size="small" type="primary" @click="saveColumnSettings">保存</a-button>
                   </a-space>
-        </div>
+                </div>
               </template>
               <a-button>
                 <template #icon><SettingOutlined /></template>
@@ -164,7 +161,6 @@
               </a-button>
             </a-popover>
           </a-space>
-        </div>
         </div>
 
         <!-- 可滚动内容区域 -->
@@ -187,35 +183,35 @@
               <template v-if="column.key === 'id'">
                 <a @click="handleViewCase(record)" class="case-link">{{ getCaseDisplayId(record, index) }}</a>
               </template>
-              
+
               <template v-else-if="column.key === 'name'">
                 <span :title="record.name">{{ record.name }}</span>
               </template>
-              
+
               <template v-else-if="column.key === 'level'">
                 <a-tag :color="getLevelColor(record.priority)">
                   {{ record.priority }}
                 </a-tag>
               </template>
-              
+
               <template v-else-if="column.key === 'reviewResult'">
                 <a-tag :color="getReviewResultColor((record as any).reviewResult || 'not_reviewed')">
                   {{ getReviewResultLabel((record as any).reviewResult || 'not_reviewed') }}
                 </a-tag>
               </template>
-              
+
               <template v-else-if="column.key === 'executionResult'">
                 <a-tag :color="getExecutionResultColor(record.status)">
                   {{ getExecutionResultLabel(record.status) }}
                 </a-tag>
               </template>
-              
+
               <template v-else-if="column.key === 'modulePath'">
                 <span :title="getModuleName(record.moduleId) || '未规划用例'">
                   {{ getModuleName(record.moduleId) || '未规划用例' }}
                 </span>
               </template>
-              
+
               <template v-else-if="column.key === 'tags'">
                 <span v-if="(record.tags || []).length === 0">-</span>
                 <a-space v-else wrap :size="2">
@@ -227,29 +223,29 @@
                   </a-tag>
                 </a-space>
               </template>
-              
+
               <template v-else-if="column.key === 'isAutomated'">
                 <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
                   {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
                 </a-tag>
               </template>
-              
+
               <template v-else-if="column.key === 'createdBy'">
                 {{ getDisplayName(record.createdBy) }}
               </template>
-              
+
               <template v-else-if="column.key === 'createdAt'">
                 {{ formatDateTime(record.createdAt) }}
               </template>
-              
+
               <template v-else-if="column.key === 'updatedBy'">
                 {{ getDisplayName(record.updatedBy || record.createdBy) }}
               </template>
-              
+
               <template v-else-if="column.key === 'updatedAt'">
                 {{ formatDateTime(record.updatedAt) }}
               </template>
-              
+
               <template v-else-if="column.key === 'actions'">
                 <a-space>
                   <a-button type="link" size="small" @click="handleEditCase(record)">
@@ -367,7 +363,7 @@
         @cancel="editCaseVisible = false"
       />
     </a-drawer>
-    
+
     <!-- 筛选抽屉 -->
     <TestCaseFilter
       v-model:visible="filterDrawerVisible"
@@ -475,17 +471,17 @@ const moduleContextMenu = reactive<{
 const contextMenuNodeType = computed(() => {
   const node = moduleContextMenu.node
   if (!node) return 'virtual'
-  
+
   const key = node.key as string
   if (key === 'all' || key === 'unplanned') {
     return 'virtual'
   }
-  
+
   // 检查是否是用例节点（key以case_开头）
   if (key.startsWith('case_')) {
     return 'case'
   }
-  
+
   return 'module'
 })
 
@@ -525,7 +521,7 @@ const filterFields = ref<any[]>([])
 // 加载筛选字段配置
 const loadFilterFields = async () => {
   if (!projectId.value) return
-  
+
   try {
     const fields = await testCaseApi.getFilterFields(projectId.value)
     // 转换后端数据格式为前端需要的格式
@@ -866,15 +862,15 @@ const loadModuleTree = async () => {
       size: 9999  // 获取所有用例
     })
     allCasesForTree.value = allCasesResponse.items || []
-    
+
     const response = await projectApi.getModules(projectId.value)
     // 新的响应格式包含 modules 和 totalCaseCount
     const moduleList = response.modules || response
     const totalCaseCount = response.totalCaseCount ?? allCasesForTree.value.length
-    
+
     modules.value = moduleList
     const treeData = buildModuleTree(moduleList, allCasesForTree.value)
-    
+
     // 添加"全部用例"节点，使用后端返回的总数
     moduleTreeData.value = [
       {
@@ -924,7 +920,7 @@ const buildModuleTree = (modules: any[], allCases: any[]): any[] => {
   modules.forEach(module => {
     const moduleCases = allCases.filter(c => c.moduleId === module.id)
     const moduleNode = treeMap.get(module.id)
-    
+
     moduleCases.forEach(tc => {
       moduleNode.children.push({
         title: tc.name,
@@ -978,7 +974,7 @@ const rebuildFlatModuleKeys = () => {
 // 获取模块及其所有子模块的 ID 列表
 const getModuleAndChildrenIds = (moduleId: string): string[] => {
   const result: string[] = [moduleId]
-  
+
   const findNode = (nodes: any[], targetId: string): any => {
     for (const node of nodes) {
       if (node.key === targetId) return node
@@ -999,12 +995,12 @@ const getModuleAndChildrenIds = (moduleId: string): string[] => {
       }
     })
   }
-  
+
   const targetNode = findNode(moduleTreeData.value, moduleId)
   if (targetNode) {
     collectChildModuleIds(targetNode)
   }
-  
+
   return result
 }
 
@@ -1018,22 +1014,22 @@ const loadTestCases = async () => {
       page: pagination.current,
       size: pagination.pageSize
     }
-    
+
     if (searchValue.value) {
       params.search = searchValue.value
     }
-    
+
     if (selectedModuleKeys.value[0] && selectedModuleKeys.value[0] !== 'all') {
       // 获取当前模块及其所有子模块的 ID
       const moduleIds = getModuleAndChildrenIds(selectedModuleKeys.value[0])
       params.moduleIds = moduleIds.join(',')  // 传递逗号分隔的模块 ID 列表
     }
-    
+
     // 旧版筛选条件（兼容性）
     if (filters.level) {
       params.priority = filters.level
     }
-    
+
     if (filters.executionResult) {
       params.status = filters.executionResult
     }
@@ -1041,34 +1037,34 @@ const loadTestCases = async () => {
     // 高级筛选条件
     if (advancedFilters.value.length > 0) {
       console.log('应用高级筛选条件:', advancedFilters.value, '逻辑:', filterLogic.value)
-      
+
       // 处理高级筛选条件
       advancedFilters.value.forEach((condition, index) => {
         const { field, operator, value } = condition
         console.log(`筛选条件 ${index + 1}:`, { field, operator, value })
-        
+
         // 根据字段和操作符构建查询参数
         switch (field) {
           case 'id':
             if (operator === 'contains' && value) {
               // ID包含多个值，添加到搜索中
-              params.search = params.search 
-                ? `${params.search} ${value}` 
+              params.search = params.search
+                ? `${params.search} ${value}`
                 : value
             } else if (operator === 'equals' && value) {
-              params.search = params.search 
-                ? `${params.search} ${value}` 
+              params.search = params.search
+                ? `${params.search} ${value}`
                 : value
             }
             break
           case 'name':
             if (operator === 'contains' && value) {
-              params.search = params.search 
-                ? `${params.search} ${value}` 
+              params.search = params.search
+                ? `${params.search} ${value}`
                 : value
             } else if (operator === 'equals' && value) {
-              params.search = params.search 
-                ? `${params.search} ${value}` 
+              params.search = params.search
+                ? `${params.search} ${value}`
                 : value
             }
             break
@@ -1149,7 +1145,7 @@ const loadTestCases = async () => {
             break
         }
       })
-      
+
       console.log('筛选后的查询参数:', params)
     }
 
@@ -1233,9 +1229,9 @@ const handleFilterApply = (conditions: any[], logic: string) => {
   console.log('handleFilterApply 被调用:', { conditions, logic })
   advancedFilters.value = conditions
   filterLogic.value = logic as 'and' | 'or'
-  console.log('设置筛选条件:', { 
-    advancedFilters: advancedFilters.value, 
-    filterLogic: filterLogic.value 
+  console.log('设置筛选条件:', {
+    advancedFilters: advancedFilters.value,
+    filterLogic: filterLogic.value
   })
   pagination.current = 1
   loadTestCases()
@@ -1357,7 +1353,7 @@ const handleCopyCase = async (record: TestCase) => {
       level: originalCase.level,
     }
     // 不复制ID、创建时间、更新时间、创建人、更新人、case_code（让后端自动生成）
-    
+
     await testCaseApi.createTestCase(projectId.value, newCaseData)
     message.success('复制成功')
     await loadTestCases()
@@ -1395,10 +1391,10 @@ const handleExport = async ({ key }: { key: string }) => {
     try {
       // 获取当前选中的模块
       const selectedModule = selectedModuleKeys.value[0]
-      
+
       // 构建导出参数
       const exportParams: any = {}
-      
+
       // 如果选中的是模块（不是"全部用例"），则传递模块ID
       if (selectedModule && selectedModule !== 'all') {
         // 获取当前模块及其所有子模块的 ID
@@ -1406,7 +1402,7 @@ const handleExport = async ({ key }: { key: string }) => {
         exportParams.moduleIds = moduleIds.join(',')
       }
       // 如果选中的是"全部用例"，则不传递 moduleIds，导出全部用例
-      
+
       // 应用当前的筛选条件
       if (filters.level) {
         exportParams.priority = filters.level
@@ -1414,32 +1410,32 @@ const handleExport = async ({ key }: { key: string }) => {
       if (filters.executionResult) {
         exportParams.status = filters.executionResult
       }
-      
+
       // 显示加载提示
       const hide = message.loading('正在导出，请稍候...', 0)
-      
+
       try {
         // 调用导出API
         const blob = await testCaseApi.exportCases(projectId.value, exportParams)
-        
+
         // 创建下载链接
         const url = window.URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        
+
         // 生成文件名
         const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_')
-        const moduleName = selectedModule && selectedModule !== 'all' 
-          ? (findModuleById(selectedModule)?.name || '模块') 
+        const moduleName = selectedModule && selectedModule !== 'all'
+          ? (findModuleById(selectedModule)?.name || '模块')
           : '全部用例'
         link.download = `测试用例_${moduleName}_${timestamp}.xlsx`
-        
+
         // 触发下载
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
         window.URL.revokeObjectURL(url)
-        
+
         message.success('导出成功')
       } finally {
         hide()
@@ -1479,7 +1475,7 @@ const handleBatchDelete = () => {
     onOk: async () => {
       try {
         await Promise.all(
-          selectedRowKeys.value.map(id => 
+          selectedRowKeys.value.map(id =>
             testCaseApi.deleteTestCase(projectId.value, id)
           )
         )
@@ -1506,25 +1502,25 @@ const hideModuleContextMenu = () => {
 const handleModuleRightClick = (info: any) => {
   const { event, node } = info
   event.preventDefault()
-  
+
   // 使用 clientX/clientY 配合 fixed 定位，确保菜单显示在鼠标右侧
   const menuWidth = 150  // 菜单预估宽度
   const menuHeight = 200 // 菜单预估高度
-  
+
   // 检查是否会超出屏幕边界
   let x = event.clientX
   let y = event.clientY
-  
+
   // 如果菜单会超出右边界，则显示在鼠标左侧
   if (x + menuWidth > window.innerWidth) {
     x = x - menuWidth
   }
-  
+
   // 如果菜单会超出下边界，则向上调整
   if (y + menuHeight > window.innerHeight) {
     y = window.innerHeight - menuHeight - 10
   }
-  
+
   moduleContextMenu.visible = true
   moduleContextMenu.x = x
   moduleContextMenu.y = y
@@ -1588,12 +1584,12 @@ const handleModuleDrop = async (info: any) => {
         module_id: targetModuleId
       })
       message.success('用例已移动')
-      
+
       // 自动展开目标模块
       if (targetModuleId && !expandedModuleKeys.value.includes(targetModuleId)) {
         expandedModuleKeys.value = [...expandedModuleKeys.value, targetModuleId]
       }
-      
+
       await loadTestCases()
       await loadModuleTree()
     } catch (error) {
@@ -1630,12 +1626,12 @@ const handleModuleDrop = async (info: any) => {
         description: dragModule.description
       })
       message.success('模块已移动')
-      
+
       // 自动展开新的父模块
       if (newParentId && !expandedModuleKeys.value.includes(newParentId)) {
         expandedModuleKeys.value = [...expandedModuleKeys.value, newParentId]
       }
-      
+
       // 刷新用例和模块树以更新用例数量
       await loadTestCases()
       await loadModuleTree()
@@ -1674,12 +1670,12 @@ const handleDeleteCaseFromTree = (node: any) => {
     message.warning('请先选择项目')
     return
   }
-  
+
   // 从 key 中提取用例 ID（格式：case_xxx）
   const nodeKey = node.key as string
   const caseId = nodeKey.replace('case_', '')
   const caseName = node.title || '该用例'
-  
+
   Modal.confirm({
     title: '确认删除',
     content: `确定要删除用例"${caseName}"吗？`,
@@ -1746,9 +1742,9 @@ const handleAddCase = (node: any) => {
     message.warning('请先选择项目')
     return
   }
-  
+
   editingCaseId.value = ''
-  
+
   // 设置默认模块ID（如果不是虚拟节点）
   const nodeKey = node?.key as string
   if (nodeKey && nodeKey !== 'all' && nodeKey !== 'unplanned') {
@@ -1756,7 +1752,7 @@ const handleAddCase = (node: any) => {
   } else {
     defaultModuleId.value = ''
   }
-  
+
   editCaseVisible.value = true
 }
 
@@ -1882,10 +1878,10 @@ const handleExportFromTree = async (node: any) => {
 
   try {
     const nodeKey = node.key as string
-    
+
     // 构建导出参数
     const exportParams: any = {}
-    
+
     // 如果选中的是模块（不是"全部用例"），则传递模块ID
     if (nodeKey && nodeKey !== 'all') {
       // 获取当前模块及其所有子模块的 ID
@@ -1893,32 +1889,32 @@ const handleExportFromTree = async (node: any) => {
       exportParams.moduleIds = moduleIds.join(',')
     }
     // 如果选中的是"全部用例"，则不传递 moduleIds，导出全部用例
-    
+
     // 显示加载提示
     const hide = message.loading('正在导出，请稍候...', 0)
-    
+
     try {
       // 调用导出API
       const blob = await testCaseApi.exportCases(projectId.value, exportParams)
-      
+
       // 创建下载链接
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      
+
       // 生成文件名
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_')
-      const moduleName = nodeKey && nodeKey !== 'all' 
-        ? (node.title || findModuleById(nodeKey)?.name || '模块') 
+      const moduleName = nodeKey && nodeKey !== 'all'
+        ? (node.title || findModuleById(nodeKey)?.name || '模块')
         : '全部用例'
       link.download = `测试用例_${moduleName}_${timestamp}.xlsx`
-      
+
       // 触发下载
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-      
+
       message.success('导出成功')
     } finally {
       hide()
@@ -2071,7 +2067,7 @@ onUnmounted(() => {
   height: 100%;
   background: #f5f5f5;
   }
-  
+
 .test-cases-layout {
   height: 100%;
 }
@@ -2082,7 +2078,7 @@ onUnmounted(() => {
     padding: 16px;
   overflow-y: auto;
   }
-  
+
 .module-search {
   margin-bottom: 16px;
 }
@@ -2102,7 +2098,7 @@ onUnmounted(() => {
   vertical-align: middle;
   text-align: left;
   }
-  
+
 /* 树容器横向滚动 */
 .module-tree-sider :deep(.ant-tree) {
   overflow-x: auto;
@@ -2121,14 +2117,14 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   }
-  
+
 /* 用例节点样式 */
 .module-tree-sider :deep(.ant-tree-title) {
   display: inline-block;
   text-align: left;
   width: 100%;
   }
-  
+
 /* 右键菜单样式 - Windows 风格 */
 .module-context-menu {
   position: fixed;
@@ -2136,19 +2132,19 @@ onUnmounted(() => {
   background: #fff;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
-  box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12), 
-              0 6px 16px 0 rgba(0, 0, 0, 0.08), 
+  box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12),
+              0 6px 16px 0 rgba(0, 0, 0, 0.08),
               0 9px 28px 8px rgba(0, 0, 0, 0.05);
   padding: 4px 0;
   min-width: 140px;
   }
-  
+
 .module-context-menu :deep(.ant-menu) {
   border: none;
   box-shadow: none;
   background: transparent;
   }
-  
+
 .module-context-menu :deep(.ant-menu-item) {
   height: 32px;
   line-height: 32px;
@@ -2156,11 +2152,11 @@ onUnmounted(() => {
   padding: 0 12px !important;
   border-radius: 0;
   }
-  
+
 .module-context-menu :deep(.ant-menu-item:hover) {
   background-color: #f5f5f5;
   }
-  
+
 .module-context-menu :deep(.ant-menu-item-divider) {
   margin: 4px 0;
   background-color: #f0f0f0;
@@ -2188,8 +2184,26 @@ onUnmounted(() => {
 
 .toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.toolbar .ant-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.toolbar .ant-input-search {
+  flex-shrink: 0;
+}
+
+.toolbar .ant-select {
+  flex-shrink: 0;
+}
+
+.toolbar .ant-popover {
+  flex-shrink: 0;
 }
 
 /* 可滚动表格内容区域 */
@@ -2198,15 +2212,15 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 0 16px;
 }
-  
+
 .filter-panel {
   margin-bottom: 16px;
   }
-  
+
 .table-card {
   margin-bottom: 16px;
   }
-  
+
 /* 表格单行显示，不换行 */
 .table-card :deep(.ant-table-cell) {
   white-space: nowrap;
@@ -2219,11 +2233,11 @@ onUnmounted(() => {
   color: #1890ff;
   cursor: pointer;
   }
-  
+
 .case-link:hover {
   text-decoration: underline;
 }
-  
+
 .batch-actions {
   display: flex;
   align-items: center;
@@ -2243,7 +2257,7 @@ onUnmounted(() => {
   align-items: center;
   flex-shrink: 0;
 }
-  
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .module-tree-sider {
@@ -2257,7 +2271,7 @@ onUnmounted(() => {
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .toolbar > * {
     width: 100%;
   }

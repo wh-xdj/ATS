@@ -20,10 +20,10 @@
             :columns="columns"
             :data-source="environments"
             :pagination="false"
-          :row-key="record => record.id"
-          :scroll="{ x: 1000 }"
-          @change="handleTableChange"
-        >
+            :row-key="record => record.id"
+            :scroll="{ x: 1000, y: 'calc(100vh - 340px)' }"
+            @change="handleTableChange"
+          >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'tags'">
               <a-space v-if="record.tags" wrap :size="4">
@@ -84,21 +84,21 @@
           </template>
         </a-table>
       </a-spin>
-    </a-card>
-    </div>
 
-    <!-- 固定底部分页器 -->
-    <div class="fixed-footer">
-      <a-pagination
-        v-model:current="pagination.current"
-        v-model:page-size="pagination.pageSize"
-        :total="pagination.total"
-        :show-size-changer="true"
-        :show-quick-jumper="true"
-        :show-total="(total) => `共 ${total} 条`"
-        @change="handlePaginationChange"
-        @show-size-change="handlePaginationChange"
-      />
+      <!-- 固定底部分页器 -->
+      <div class="fixed-footer">
+        <a-pagination
+          v-model:current="pagination.current"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :show-size-changer="true"
+          :show-quick-jumper="true"
+          :show-total="(total) => `共 ${total} 条`"
+          @change="handlePaginationChange"
+          @show-size-change="handlePaginationChange"
+        />
+      </div>
+    </a-card>
     </div>
 
     <!-- 启动命令对话框 -->
@@ -116,7 +116,7 @@
           show-icon
           style="margin-bottom: 16px"
         />
-        
+
         <a-form-item label="启动命令">
           <a-input
             :value="startCommandData.startCommand"
@@ -938,7 +938,7 @@ const copyToken = async () => {
 
 const regenerateTokenForCurrent = async () => {
   if (!currentEnvironmentForCommand.value) return
-  
+
   Modal.confirm({
     title: '确认重新生成Token',
     content: '重新生成Token后，旧的Token将失效，需要重新启动Agent。确定要继续吗？',
@@ -1013,7 +1013,7 @@ const loadWorkspaceFiles = async () => {
   if (!currentWorkspaceEnvironment.value) {
     return
   }
-  
+
   workspaceLoading.value = true
   try {
     // 检查环境是否在线
@@ -1022,7 +1022,7 @@ const loadWorkspaceFiles = async () => {
       workspaceFiles.value = []
       return
     }
-    
+
     // 通过API获取文件列表
     const files = await environmentApi.listWorkspaceFiles(
       currentWorkspaceEnvironment.value.id,
@@ -1065,11 +1065,11 @@ const handleCreateFolder = async () => {
     message.warning('请输入文件夹名称')
     return
   }
-  
+
   try {
     const folderName = createFolderName.value.trim()
-    const newPath = currentPath.value 
-      ? `${currentPath.value}/${folderName}` 
+    const newPath = currentPath.value
+      ? `${currentPath.value}/${folderName}`
       : folderName
     await environmentApi.createWorkspaceDirectory(
       currentWorkspaceEnvironment.value.id,
@@ -1092,18 +1092,18 @@ const enterDirectory = (dir: any) => {
 
 const viewFile = async (file: any) => {
   if (!currentWorkspaceEnvironment.value) return
-  
+
   currentFile.value = file
   fileViewModalVisible.value = true
   fileViewLoading.value = true
   fileContent.value = ''
-  
+
   try {
     const data = await environmentApi.readWorkspaceFile(
       currentWorkspaceEnvironment.value.id,
       file.path
     )
-    
+
     if (data.encoding === 'base64') {
       // 如果是base64编码，显示提示信息
       fileContent.value = '[二进制文件，无法直接显示]'
@@ -1121,13 +1121,13 @@ const viewFile = async (file: any) => {
 
 const downloadFile = async (file: any) => {
   if (!currentWorkspaceEnvironment.value) return
-  
+
   try {
     const data = await environmentApi.readWorkspaceFile(
       currentWorkspaceEnvironment.value.id,
       file.path
     )
-    
+
     // 创建下载链接
     let blob: Blob
     if (data.encoding === 'base64') {
@@ -1141,7 +1141,7 @@ const downloadFile = async (file: any) => {
     } else {
       blob = new Blob([data.content], { type: 'text/plain;charset=utf-8' })
     }
-    
+
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1150,7 +1150,7 @@ const downloadFile = async (file: any) => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
+
     message.success('文件下载成功')
   } catch (error: any) {
     console.error('Failed to download file:', error)
@@ -1160,7 +1160,7 @@ const downloadFile = async (file: any) => {
 
 const deleteFile = (file: any) => {
   if (!currentWorkspaceEnvironment.value) return
-  
+
   Modal.confirm({
     title: '确认删除',
     content: `确定要删除${file.type === 'directory' ? '文件夹' : '文件'} "${file.name}" 吗？`,
@@ -1264,7 +1264,7 @@ const loadExecutionHistory = async () => {
   if (!currentEnvironmentId.value) {
     return
   }
-  
+
   executionHistoryLoading.value = true
   try {
     const params: any = {
@@ -1362,9 +1362,9 @@ const formatExecutionDuration = (duration: string | number | undefined | null): 
   } else {
     seconds = duration
   }
-  
+
   if (isNaN(seconds) || seconds <= 0) return '-'
-  
+
   if (seconds < 60) {
     return `${seconds.toFixed(1)}秒`
   } else if (seconds < 3600) {

@@ -42,7 +42,7 @@
             :icon="h(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined)"
             @click="toggleCollapsed"
           />
-          
+
           <a-breadcrumb class="breadcrumb">
             <a-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
               {{ item.title }}
@@ -151,7 +151,7 @@ const notifications = ref<Notification[]>([
   }
 ])
 
-const unreadCount = computed(() => 
+const unreadCount = computed(() =>
   notifications.value.filter(n => !n.isRead).length
 )
 
@@ -204,7 +204,7 @@ const breadcrumbs = computed(() => {
       title: item.meta?.title as string,
       path: item.path
     }))
-  
+
   // 添加项目上下文面包屑
   if (route.path.includes('/projects/') && currentProjectId.value) {
     const currentProject = projects.value.find(p => p.id === currentProjectId.value)
@@ -215,7 +215,7 @@ const breadcrumbs = computed(() => {
       })
     }
   }
-  
+
   return routeBreadcrumbs
 })
 
@@ -235,7 +235,7 @@ const handleProjectChange = (projectId: string) => {
   projectStore.setCurrentProject(
     projects.value.find(p => p.id === projectId) || null
   )
-  
+
   // 更新路由到项目上下文
   if (route.path.includes('/projects/')) {
     const newPath = route.path.replace(/\/projects\/[^/]+/, `/projects/${projectId}`)
@@ -273,13 +273,13 @@ const viewAllNotifications = () => {
 onMounted(async () => {
   // 获取项目列表
   await projectStore.fetchProjects()
-  
+
   // 设置当前项目
   if (projects.value.length > 0 && !currentProjectId.value) {
     currentProjectId.value = projects.value[0].id
     projectStore.setCurrentProject(projects.value[0])
   }
-  
+
   // 设置当前菜单选中状态
   const currentRouteName = route.name as string
   if (currentRouteName) {
@@ -350,8 +350,8 @@ onMounted(async () => {
 .layout-content {
   background: #f5f5f5;
   padding: 24px;
-  overflow: auto;
-  min-height: calc(100vh - 64px);
+  overflow: hidden;
+  height: calc(100vh - 64px);
 }
 
 .notification-item {
@@ -390,11 +390,11 @@ onMounted(async () => {
   .layout-content {
     padding: 12px;
   }
-  
+
   .header-right {
     gap: 8px;
   }
-  
+
   .header-right .ant-select {
     width: 150px !important;
     margin-right: 8px !important;
@@ -410,35 +410,35 @@ onMounted(async () => {
     z-index: 999;
     transition: transform 0.3s ease;
   }
-  
+
   .layout-sider.ant-layout-sider-collapsed {
     transform: translateX(-100%);
   }
-  
+
   .layout-header {
     padding: 0 16px;
     flex-wrap: wrap;
     gap: 12px;
   }
-  
+
   .header-left {
     flex: 1;
     min-width: 0;
   }
-  
+
   .breadcrumb {
     display: none;
   }
-  
+
   .header-right {
     gap: 4px;
   }
-  
+
   .header-right .ant-select {
     width: 120px !important;
     margin-right: 4px !important;
   }
-  
+
   .layout-content {
     padding: 8px;
   }
@@ -448,15 +448,15 @@ onMounted(async () => {
   .layout-header {
     padding: 0 12px;
   }
-  
+
   .layout-content {
     padding: 6px;
   }
-  
+
   .header-right .ant-select {
     display: none;
   }
-  
+
   .notification-item {
     max-width: 200px;
   }

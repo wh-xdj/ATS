@@ -592,7 +592,7 @@ const loadProjectStats = async () => {
 const renderTrendChart = (data: any) => {
   nextTick(() => {
     if (!trendChartRef.value) return
-    
+
     const chart = echarts.init(trendChartRef.value)
     const option = {
       tooltip: {
@@ -643,7 +643,7 @@ const renderTrendChart = (data: any) => {
       ]
     }
     chart.setOption(option)
-    
+
     // 响应式处理
     window.addEventListener('resize', () => chart.resize())
   })
@@ -652,7 +652,7 @@ const renderTrendChart = (data: any) => {
 const renderStatusChart = (data: any) => {
   nextTick(() => {
     if (!statusChartRef.value) return
-    
+
     const chart = echarts.init(statusChartRef.value)
     const option = {
       tooltip: {
@@ -681,7 +681,7 @@ const renderStatusChart = (data: any) => {
       ]
     }
     chart.setOption(option)
-    
+
     window.addEventListener('resize', () => chart.resize())
   })
 }
@@ -689,7 +689,7 @@ const renderStatusChart = (data: any) => {
 const renderExecutionChart = (data: any) => {
   nextTick(() => {
     if (!executionChartRef.value) return
-    
+
     const chart = echarts.init(executionChartRef.value)
     const option = {
       tooltip: {
@@ -724,7 +724,7 @@ const renderExecutionChart = (data: any) => {
       }))
     }
     chart.setOption(option)
-    
+
     window.addEventListener('resize', () => chart.resize())
   })
 }
@@ -780,7 +780,7 @@ const confirmGenerateReport = async () => {
 
     message.success('报告生成成功')
     reportModalVisible.value = false
-    
+
     // 下载报告
     if (response.data.downloadUrl) {
       window.open(response.data.downloadUrl)
@@ -855,11 +855,17 @@ onMounted(() => {
 
 <style scoped>
 .dashboard-container {
-  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  overflow: hidden;
 }
 
 .dashboard-content {
-  margin-top: 16px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .overview-cards {
@@ -918,11 +924,11 @@ onMounted(() => {
   .overview-cards .ant-col {
     margin-bottom: 16px;
   }
-  
+
   .chart-section .ant-col {
     margin-bottom: 16px;
   }
-  
+
   .table-section .ant-col {
     margin-bottom: 16px;
   }
@@ -932,28 +938,28 @@ onMounted(() => {
   .overview-cards .ant-col {
     margin-bottom: 12px;
   }
-  
+
   .chart-section .ant-col {
     margin-bottom: 12px;
   }
-  
+
   .chart-container {
     height: 250px;
   }
-  
+
   .table-card .ant-card-head {
     padding: 12px 16px;
   }
-  
+
   .table-card .ant-card-body {
     padding: 12px;
   }
-  
+
   .table-card .ant-table-thead > tr > th {
     padding: 8px 12px;
     font-size: 12px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td {
     padding: 6px 12px;
     font-size: 12px;
@@ -964,75 +970,75 @@ onMounted(() => {
   .dashboard-content {
     margin-top: 8px;
   }
-  
+
   .overview-cards {
     margin-bottom: 16px;
   }
-  
+
   .chart-section {
     margin-bottom: 16px;
   }
-  
+
   .chart-container {
     height: 200px;
   }
-  
+
   .activity-card .ant-card-body {
     padding: 12px;
   }
-  
+
   .activity-title {
     font-size: 13px;
   }
-  
+
   .activity-description {
     font-size: 11px;
   }
-  
+
   .activity-time {
     font-size: 11px;
   }
-  
+
   .table-card .ant-card-head {
     padding: 8px 12px;
   }
-  
+
   .table-card .ant-card-head-title {
     font-size: 14px;
   }
-  
+
   .table-card .ant-card-extra {
     padding: 8px 0;
   }
-  
+
   .table-card .ant-card-body {
     padding: 8px;
   }
-  
+
   .table-card .ant-table-thead > tr > th {
     padding: 6px 8px;
     font-size: 11px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td {
     padding: 4px 8px;
     font-size: 11px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td .ant-space {
     gap: 4px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td .ant-btn {
     padding: 0 4px;
     height: 20px;
     font-size: 11px;
   }
-  
+
   .table-card .ant-pagination {
     text-align: center;
   }
-  
+
   .table-card .ant-pagination-item,
   .table-card .ant-pagination-next,
   .table-card .ant-pagination-prev {
@@ -1047,76 +1053,76 @@ onMounted(() => {
   .dashboard-content {
     margin-top: 4px;
   }
-  
+
   .overview-cards,
   .chart-section,
   .table-section {
     margin-bottom: 12px;
   }
-  
+
   .chart-container {
     height: 180px;
   }
-  
+
   .activity-card {
     margin-top: 16px;
   }
-  
+
   .activity-card .ant-card-body {
     padding: 8px;
   }
-  
+
   .activity-card .ant-list-item {
     padding: 8px 0;
   }
-  
+
   .activity-card .ant-list-item-meta-title {
     font-size: 12px;
   }
-  
+
   .activity-card .ant-list-item-meta-description {
     font-size: 10px;
   }
-  
+
   .table-card .ant-card-head {
     padding: 6px 8px;
   }
-  
+
   .table-card .ant-card-head-title {
     font-size: 13px;
   }
-  
+
   .table-card .ant-card-extra {
     padding: 4px 0;
   }
-  
+
   .table-card .ant-card-extra .ant-space {
     flex-wrap: wrap;
     gap: 4px;
   }
-  
+
   .table-card .ant-card-body {
     padding: 4px;
   }
-  
+
   .table-card .ant-table {
     font-size: 11px;
   }
-  
+
   .table-card .ant-table-thead > tr > th {
     padding: 4px 6px;
     font-size: 10px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td {
     padding: 2px 6px;
     font-size: 10px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td .ant-space {
     gap: 2px;
   }
-  
+
   .table-card .ant-table-tbody > tr > td .ant-btn {
     padding: 0 2px;
     height: 16px;
@@ -1129,15 +1135,15 @@ onMounted(() => {
   .chart-card .ant-card-head {
     padding: 8px 12px;
   }
-  
+
   .chart-card .ant-card-head-title {
     font-size: 14px;
   }
-  
+
   .chart-card .ant-card-extra {
     padding: 4px 0;
   }
-  
+
   .chart-card .ant-card-body {
     padding: 8px;
   }
@@ -1148,11 +1154,11 @@ onMounted(() => {
   .stat-card .ant-statistic-title {
     font-size: 12px;
   }
-  
+
   .stat-card .ant-statistic-content {
     font-size: 16px;
   }
-  
+
   .stat-card .ant-statistic-content-prefix {
     font-size: 14px;
   }

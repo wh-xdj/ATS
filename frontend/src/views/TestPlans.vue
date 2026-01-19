@@ -105,15 +105,15 @@
           :loading="loading"
           :pagination="false"
           :row-key="record => record.id"
-          :scroll="{ x: 1200 }"
+          :scroll="{ x: 1200, y: 'calc(100vh - 420px)' }"
           @change="handleTableChange"
           size="middle"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
-              <a 
+              <a
                 v-if="record.status !== 'not_started'"
-                @click="viewPlanExecution(record)" 
+                @click="viewPlanExecution(record)"
                 class="plan-name-link"
               >
                 {{ record.name }}
@@ -142,8 +142,8 @@
               <div class="progress-wrapper" @click="viewPlanDetail(record.id)">
                 <div class="progress-content">
                   <div class="multi-status-progress">
-                    <div 
-                      v-for="segment in getProgressSegments(record)" 
+                    <div
+                      v-for="segment in getProgressSegments(record)"
                       :key="segment.status"
                       class="progress-segment"
                       :class="`segment-${segment.status}`"
@@ -220,6 +220,20 @@
           </template>
         </a-table>
       </a-card>
+
+      <!-- 固定底部分页器 -->
+      <div class="fixed-footer">
+        <a-pagination
+          v-model:current="pagination.current"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :show-size-changer="true"
+          :show-quick-jumper="true"
+          :show-total="(total) => `共 ${total} 条`"
+          @change="handlePaginationChange"
+          @show-size-change="handlePaginationChange"
+        />
+      </div>
     </div>
 
     <!-- 计划详情抽屉 -->
@@ -264,7 +278,7 @@
       :confirm-loading="executing"
     >
       <a-form layout="vertical">
-        <a-form-item 
+        <a-form-item
           v-if="selectedPlan && selectedPlan.planType !== 'manual'"
           label="执行环境"
           :rules="[{ required: selectedPlan && selectedPlan.planType !== 'manual', message: '请选择执行环境' }]"
@@ -438,19 +452,19 @@ const loadPlans = async () => {
       startDate: dateRange.value?.[0]?.format('YYYY-MM-DD'),
       endDate: dateRange.value?.[1]?.format('YYYY-MM-DD')
     }
-    
+
     if (!projectId.value) {
       message.warning('请先选择项目')
       return
     }
-    
+
     console.log('开始加载测试计划，projectId:', projectId.value, 'params:', params)
-    
+
     const response = await testPlanApi.getTestPlans(projectId.value, params)
     console.log('获取测试计划响应:', response)
     console.log('响应类型:', typeof response)
     console.log('响应是否为数组:', Array.isArray(response))
-    
+
     // apiClient.get() 返回的是 response.data.data，所以这里直接是分页数据对象
     if (response && typeof response === 'object') {
       if (Array.isArray(response)) {
@@ -481,7 +495,7 @@ const loadPlans = async () => {
       plans.value = []
       pagination.value.total = 0
     }
-    
+
     console.log('最终计划列表:', plans.value.map(p => ({ id: p.id, name: p.name })))
   } catch (error) {
     console.error('Failed to load plans:', error)
@@ -571,7 +585,7 @@ const viewPlanExecution = (plan: TestPlan) => {
   // 获取项目名称
   const project = projects.value.find(p => p.id === plan.projectId)
   const projectName = project?.name || 'default'
-  
+
   // 构建URL：/test-plans/{projectName}/{planName}?planId={planId}
   const encodedProjectName = encodeURIComponent(projectName)
   const encodedPlanName = encodeURIComponent(plan.name)
@@ -828,7 +842,7 @@ const getProgressSegments = (plan: TestPlan) => {
   ]
 
   const segments: Array<{ status: string; label: string; percent: number; count: number; color: string }> = []
-  
+
   statusOrder.forEach(({ status, label, color }) => {
     const count = statusCounts[status] || 0
     if (count > 0) {
@@ -944,17 +958,18 @@ defineExpose({
   margin: 0;
 }
 
-/* 固定底部分页器 */
+/* 固定底部分页器和批量操作栏 */
 .fixed-footer {
   position: sticky;
   bottom: 0;
   z-index: 100;
   background: #fff;
   border-top: 1px solid #f0f0f0;
-  padding: 16px;
+  padding: 12px 16px;
   margin-bottom: 20px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -1113,7 +1128,7 @@ defineExpose({
   .content-wrapper {
     padding: 16px;
   }
-  
+
   .plans-grid {
     gap: 16px;
   }
@@ -1123,11 +1138,11 @@ defineExpose({
   .content-wrapper {
     padding: 12px;
   }
-  
+
   .plans-grid {
     gap: 12px;
   }
-  
+
   .plan-card {
     padding: 16px;
   }
@@ -1137,49 +1152,49 @@ defineExpose({
   .content-wrapper {
     padding: 8px;
   }
-  
+
   .filter-card {
     margin-bottom: 12px;
   }
-  
+
   .filter-card :deep(.ant-row) {
     gap: 8px;
   }
-  
+
   .filter-card :deep(.ant-col) {
     margin-bottom: 8px;
   }
-  
+
   .filter-card :deep(.ant-input-search),
   .filter-card :deep(.ant-select),
   .filter-card :deep(.ant-picker) {
     width: 100% !important;
   }
-  
+
   .plans-grid {
     gap: 8px;
   }
-  
+
   .plan-card {
     padding: 12px;
   }
-  
+
   .plan-header {
     margin-bottom: 12px;
   }
-  
+
   .plan-header h3 {
     font-size: 16px;
   }
-  
+
   .plan-stats {
     gap: 12px;
   }
-  
+
   .plan-stat {
     padding: 8px;
   }
-  
+
   .plan-actions {
     gap: 8px;
   }
@@ -1189,62 +1204,62 @@ defineExpose({
   .content-wrapper {
     padding: 6px;
   }
-  
+
   .page-header {
     margin-bottom: 12px;
     padding: 12px;
   }
-  
+
   .page-header h2 {
     font-size: 18px;
   }
-  
+
   .plan-card {
     padding: 10px;
   }
-  
+
   .plan-header {
     margin-bottom: 10px;
   }
-  
+
   .plan-header h3 {
     font-size: 14px;
     margin-bottom: 4px;
   }
-  
+
   .plan-description {
     font-size: 12px;
     margin-bottom: 8px;
   }
-  
+
   .plan-stats {
     gap: 8px;
     margin-bottom: 8px;
   }
-  
+
   .plan-stat {
     padding: 6px;
     font-size: 12px;
   }
-  
+
   .plan-actions {
     flex-direction: column;
     gap: 6px;
   }
-  
+
   .plan-actions .ant-btn {
     width: 100%;
   }
-  
+
   .filter-card :deep(.ant-row) {
     flex-direction: column;
     gap: 6px;
   }
-  
+
   .filter-card :deep(.ant-col) {
     margin-bottom: 6px;
   }
-  
+
   .pagination {
     margin-top: 16px;
     text-align: center;

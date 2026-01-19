@@ -49,6 +49,7 @@
           :row-selection="rowSelection"
           :pagination="false"
           :row-key="record => record.id"
+          :scroll="{ x: 1200, y: 'calc(100vh - 340px)' }"
           @change="handleTableChange"
           size="middle"
         >
@@ -82,7 +83,7 @@
               <template v-else-if="column.key === 'createdAt'">
                 {{ formatDateTime(record.createdAt) }}
               </template>
-              
+
               <template v-else-if="column.key === 'actions'">
                 <a-space>
                   <a-button type="link" size="small" @click="handleEdit(record)">
@@ -108,20 +109,20 @@
             </template>
           </a-table>
         </a-card>
-    </div>
 
-    <!-- 固定底部分页器 -->
-    <div class="fixed-footer">
-      <a-pagination
-        v-model:current="pagination.current"
-        v-model:page-size="pagination.pageSize"
-        :total="pagination.total"
-        :show-size-changer="true"
-        :show-quick-jumper="true"
-        :show-total="(total) => `共 ${total} 条`"
-        @change="handlePaginationChange"
-        @show-size-change="handlePaginationChange"
-      />
+        <!-- 固定底部分页器 -->
+        <div class="fixed-footer">
+          <a-pagination
+            v-model:current="pagination.current"
+            v-model:page-size="pagination.pageSize"
+            :total="pagination.total"
+            :show-size-changer="true"
+            :show-quick-jumper="true"
+            :show-total="(total) => `共 ${total} 条`"
+            @change="handlePaginationChange"
+            @show-size-change="handlePaginationChange"
+          />
+        </div>
     </div>
 
     <!-- 创建/编辑项目对话框 -->

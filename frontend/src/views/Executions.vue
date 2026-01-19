@@ -1,133 +1,145 @@
 <template>
   <div class="executions-container">
-    <a-page-header
-      title="执行历史"
-    >
-      <template #extra>
-        <a-space>
-          <a-button @click="refreshExecutions">
-            <template #icon><ReloadOutlined /></template>
-            刷新
-          </a-button>
-          <a-button @click="exportExecutions">
-            <template #icon><DownloadOutlined /></template>
-            导出
-          </a-button>
-        </a-space>
-      </template>
-    </a-page-header>
-
-    <!-- 固定顶部工具栏和筛选区域 -->
-    <div class="fixed-header">
-      <a-card class="executions-content">
-        <!-- 筛选区域 -->
-        <div class="filter-section">
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8" :lg="6">
-            <a-input-search
-              v-model:value="searchValue"
-              placeholder="搜索用例名称或编号"
-              @search="handleSearch"
-              allow-clear
-            />
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8" :lg="6">
-            <a-select
-              v-model:value="resultFilter"
-              placeholder="执行结果"
-              style="width: 100%"
-              allow-clear
-              @change="handleFilterChange"
-            >
-              <a-select-option value="passed">通过</a-select-option>
-              <a-select-option value="failed">失败</a-select-option>
-              <a-select-option value="blocked">阻塞</a-select-option>
-              <a-select-option value="skipped">跳过</a-select-option>
-            </a-select>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8" :lg="6">
-            <a-range-picker
-              v-model:value="dateRange"
-              style="width: 100%"
-              @change="handleFilterChange"
-            />
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8" :lg="6">
-            <a-button @click="resetFilters">
-              <template #icon><ReloadOutlined /></template>
-              重置
-            </a-button>
-          </a-col>
-        </a-row>
-      </div>
-      </a-card>
-    </div>
-
-    <!-- 可滚动内容区域 -->
-    <div class="scrollable-content">
-      <!-- 执行列表 -->
-      <a-table
-        :columns="columns"
-        :data-source="executions"
-        :loading="loading"
-        :pagination="false"
-        :row-key="record => record.id"
-        @change="handleTableChange"
+    <!-- 顶部项目选择器 -->
+    <div class="project-selector-bar">
+      <a-select
+        v-model:value="currentProjectId"
+        style="width: 220px"
+        placeholder="选择项目"
       >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'caseName'">
-            <a @click="viewExecutionDetail(record.id)">{{ record.caseName || '未知用例' }}</a>
-          </template>
-
-          <template v-else-if="column.key === 'result'">
-            <a-tag :color="getResultColor(record.result)">
-              {{ getResultText(record.result) }}
-            </a-tag>
-          </template>
-
-          <template v-else-if="column.key === 'duration'">
-            {{ formatDuration(record.duration) }}
-          </template>
-
-          <template v-else-if="column.key === 'executedAt'">
-            {{ formatDateTime(record.executedAt) }}
-          </template>
-
-          <template v-else-if="column.key === 'actions'">
+        <a-select-option
+          v-for="project in projects"
+          :key="project.id"
+          :value="project.id"
+        >
+          {{ project.name }}
+        </a-select-option>
+      </a-select>
+    </div>
+        
+    <a-layout class="executions-layout">
+      <!-- 左侧占位区域（保持与测试用例布局一致） -->
+      <a-layout-sider width="240" class="executions-sider">
+        <div class="sider-placeholder">
+          <p>执行历史</p>
+        </div>
+      </a-layout-sider>
+      
+      <!-- 右侧主内容区 -->
+      <a-layout-content class="executions-content">
+        <!-- 固定顶部工具栏 -->
+        <div class="fixed-toolbar">
+          <div class="toolbar">
             <a-space>
-              <a-button type="link" size="small" @click="viewExecutionDetail(record.id)">
-                查看
+              <a-button @click="refreshExecutions">
+                <template #icon><ReloadOutlined /></template>
+                刷新
               </a-button>
-              <a-button type="link" size="small" @click="viewLogs(record.id)">
-                日志
-              </a-button>
-              <a-button
-                v-if="record.result === 'failed'"
-                type="link"
-                size="small"
-                @click="reExecute(record.id)"
-              >
-                重试
+              <a-button @click="exportExecutions">
+                <template #icon><DownloadOutlined /></template>
+                导出
               </a-button>
             </a-space>
-          </template>
-        </template>
-      </a-table>
-    </div>
+            
+            <a-space>
+              <a-input-search
+                v-model:value="searchValue"
+                placeholder="搜索用例名称或编号"
+                style="width: 300px"
+                @search="handleSearch"
+                allow-clear
+              />
+              <a-select
+                v-model:value="resultFilter"
+                placeholder="执行结果"
+                style="width: 120px"
+                allow-clear
+                @change="handleFilterChange"
+              >
+                <a-select-option value="passed">通过</a-select-option>
+                <a-select-option value="failed">失败</a-select-option>
+                <a-select-option value="blocked">阻塞</a-select-option>
+                <a-select-option value="skipped">跳过</a-select-option>
+              </a-select>
+              <a-range-picker
+                v-model:value="dateRange"
+                style="width: 240px"
+                @change="handleFilterChange"
+              />
+              <a-button @click="resetFilters">
+                <template #icon><ReloadOutlined /></template>
+                重置
+              </a-button>
+            </a-space>
+          </div>
+        </div>
 
-    <!-- 固定底部分页器 -->
-    <div class="fixed-footer">
-      <a-pagination
-        v-model:current="pagination.current"
-        v-model:page-size="pagination.pageSize"
-        :total="pagination.total"
-        :show-size-changer="true"
-        :show-quick-jumper="true"
-        :show-total="(total) => `共 ${total} 条`"
-        @change="handlePaginationChange"
-        @show-size-change="handlePaginationChange"
-      />
-    </div>
+        <!-- 可滚动表格内容区域 -->
+        <div class="scrollable-table-content">
+          <a-table
+            :columns="columns"
+            :data-source="executions"
+            :loading="loading"
+            :pagination="false"
+            :row-key="record => record.id"
+            @change="handleTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'caseName'">
+                <a @click="viewExecutionDetail(record.id)">{{ record.caseName || '未知用例' }}</a>
+              </template>
+
+              <template v-else-if="column.key === 'result'">
+                <a-tag :color="getResultColor(record.result)">
+                  {{ getResultText(record.result) }}
+                </a-tag>
+              </template>
+
+              <template v-else-if="column.key === 'duration'">
+                {{ formatDuration(record.duration) }}
+              </template>
+
+              <template v-else-if="column.key === 'executedAt'">
+                {{ formatDateTime(record.executedAt) }}
+              </template>
+
+              <template v-else-if="column.key === 'actions'">
+                <a-space>
+                  <a-button type="link" size="small" @click="viewExecutionDetail(record.id)">
+                    查看
+                  </a-button>
+                  <a-button type="link" size="small" @click="viewLogs(record.id)">
+                    日志
+                  </a-button>
+                  <a-button
+                    v-if="record.result === 'failed'"
+                    type="link"
+                    size="small"
+                    @click="reExecute(record.id)"
+                  >
+                    重试
+                  </a-button>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </div>
+
+        <!-- 固定底部分页器 -->
+        <div class="fixed-footer">
+          <a-pagination
+            v-model:current="pagination.current"
+            v-model:page-size="pagination.pageSize"
+            :total="pagination.total"
+            :show-size-changer="true"
+            :show-quick-jumper="true"
+            :show-total="(total) => `共 ${total} 条`"
+            @change="handlePaginationChange"
+            @show-size-change="handlePaginationChange"
+          />
+        </div>
+      </a-layout-content>
+    </a-layout>
 
     <!-- 执行详情对话框 -->
     <a-modal
@@ -539,36 +551,116 @@ watch(
 
 <style scoped>
 .executions-container {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  height: 100%;
   background: #f5f5f5;
-  overflow: hidden;
 }
 
-/* 固定顶部工具栏和筛选区域 */
-.fixed-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: #f5f5f5;
+.project-selector-bar {
+  padding: 16px;
+  background: #fff;
   border-bottom: 1px solid #f0f0f0;
-  flex-shrink: 0;
+}
+
+.executions-layout {
+  height: calc(100% - 65px);
+}
+
+.executions-sider {
+  background: #fff;
+  border-right: 1px solid #f0f0f0;
+  padding: 16px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.sider-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 自定义左侧栏滚动条样式 */
+.executions-sider::-webkit-scrollbar {
+  width: 6px;
+}
+
+.executions-sider::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.executions-sider::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.executions-sider::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Firefox 滚动条样式 */
+.executions-sider {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .executions-content {
-  margin: 16px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  margin: 0;
+  overflow: hidden;
+  height: 100%;
 }
 
-.filter-section {
-  margin-bottom: 0;
+/* 固定顶部工具栏 */
+.fixed-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px;
+  flex-shrink: 0;
 }
 
-/* 可滚动内容区域 */
-.scrollable-content {
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 可滚动表格内容区域 */
+.scrollable-table-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 16px 16px;
+  padding: 0 16px;
+}
+
+/* 自定义滚动条样式 */
+.scrollable-table-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-table-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollable-table-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.scrollable-table-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Firefox 滚动条样式 */
+.scrollable-table-content {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 /* 固定底部分页器 */
@@ -579,10 +671,11 @@ watch(
   background: #fff;
   border-top: 1px solid #f0f0f0;
   padding: 16px;
-  margin-bottom: 20px;
+  padding-bottom: 20px;
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .execution-detail {

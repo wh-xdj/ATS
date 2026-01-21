@@ -1,258 +1,72 @@
 <template>
   <div class="test-plan-edit">
-    <a-spin :spinning="loading">
-      <a-form
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        layout="vertical"
-        @finish="handleSubmit"
-      >
-        <!-- 上部区域：基本信息和执行配置 -->
-        <a-row :gutter="24">
+    <!-- 固定顶部区域：基本信息 -->
+    <div class="fixed-header">
+      <a-card title="基本信息" class="form-card" size="small">
+        <a-row :gutter="16">
           <a-col :span="12">
-            <a-card title="基本信息" class="form-card" size="small">
-              <a-row :gutter="16">
-                <a-col :span="12">
-                  <a-form-item label="计划名称" name="name">
-                    <a-input
-                      v-model:value="formData.name"
-                      placeholder="请输入测试计划名称"
-                      :maxlength="100"
-                      show-count
-                    />
-                  </a-form-item>
-                </a-col>
-                <a-col :span="12">
-                  <a-form-item label="计划类型" name="planType">
-                    <a-select v-model:value="formData.planType" placeholder="请选择计划类型">
-                      <a-select-option value="manual">手动测试</a-select-option>
-                      <a-select-option value="automated">自动化测试</a-select-option>
-                      <a-select-option value="mixed">混合测试</a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-              </a-row>
-
-              <a-row :gutter="16">
-                <a-col :span="12">
-                  <a-form-item label="开始时间" name="startDate">
-                    <a-date-picker
-                      v-model:value="formData.startDate"
-                      style="width: 100%"
-                      placeholder="请选择开始时间"
-                      @change="handleDateChange"
-                    />
-                  </a-form-item>
-                </a-col>
-                <a-col :span="12">
-                  <a-form-item label="结束时间" name="endDate">
-                    <a-date-picker
-                      v-model:value="formData.endDate"
-                      style="width: 100%"
-                      placeholder="请选择结束时间"
-                      :disabled-date="disabledEndDate"
-                      @change="handleDateChange"
-                    />
-                  </a-form-item>
-                </a-col>
-              </a-row>
-
-              <a-form-item label="计划描述" name="description">
-                <a-textarea
-                  v-model:value="formData.description"
-                  placeholder="请输入测试计划描述"
-                  :rows="2"
-                  :maxlength="1000"
-                  show-count
-                />
-              </a-form-item>
-            </a-card>
+            <a-form-item label="计划名称" name="name">
+              <a-input
+                v-model:value="formData.name"
+                placeholder="请输入测试计划名称"
+                :maxlength="100"
+                show-count
+              />
+            </a-form-item>
           </a-col>
-
           <a-col :span="12">
-            <!-- 执行配置 -->
-            <a-card class="form-card" size="small">
-              <template #title>
-                <div class="card-title-with-extra">
-                  <span>执行配置</span>
-                  <a-dropdown>
-                    <a-button type="link" size="small">
-                      更多 <DownOutlined />
-                    </a-button>
-                    <template #overlay>
-                      <a-menu @click="handleMoreMenuClick">
-                        <a-menu-item key="notification">
-                          <BellOutlined /> 通知配置
-                        </a-menu-item>
-                      </a-menu>
-                    </template>
-                  </a-dropdown>
-                </div>
-              </template>
-
-              <a-row :gutter="16">
-                <a-col :span="12">
-                  <a-form-item label="执行环境" name="environmentId">
-                    <a-select
-                      v-model:value="formData.environmentId"
-                      placeholder="请选择执行环境"
-                      allow-clear
-                      @change="handleEnvironmentChange"
-                    >
-                      <a-select-option
-                        v-for="env in environments"
-                        :key="env.id"
-                        :value="env.id"
-                      >
-                        {{ env.name }}
-                      </a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-                <a-col :span="12">
-                  <a-form-item label="执行策略" name="executionStrategy">
-                    <a-select v-model:value="formData.executionStrategy" placeholder="请选择执行策略">
-                      <a-select-option value="sequential">顺序执行</a-select-option>
-                      <a-select-option value="parallel">并行执行</a-select-option>
-                      <a-select-option value="priority">按优先级执行</a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-              </a-row>
-
-              <a-row :gutter="16">
-                <a-col :span="12">
-                  <a-form-item label="失败重试" name="retryOnFailure">
-                    <a-switch v-model:checked="formData.retryOnFailure" />
-                    <span class="switch-label">用例失败时自动重试</span>
-                  </a-form-item>
-                </a-col>
-                <a-col :span="12" v-if="formData.retryOnFailure">
-                  <a-form-item label="重试次数" name="retryCount">
-                    <a-input-number
-                      v-model:value="formData.retryCount"
-                      :min="1"
-                      :max="5"
-                      style="width: 100%"
-                    />
-                  </a-form-item>
-                </a-col>
-              </a-row>
-
-              <a-form-item label="备注" name="notes">
-                <a-textarea
-                  v-model:value="formData.notes"
-                  placeholder="请输入备注信息（可选）"
-                  :rows="2"
-                  :maxlength="500"
-                />
-              </a-form-item>
-            </a-card>
+            <a-form-item label="计划类型" name="planType">
+              <a-select v-model:value="formData.planType" placeholder="请选择计划类型">
+                <a-select-option value="manual">手动测试</a-select-option>
+                <a-select-option value="automated">自动化测试</a-select-option>
+                <a-select-option value="mixed">混合测试</a-select-option>
+              </a-select>
+            </a-form-item>
           </a-col>
         </a-row>
 
-        <!-- 下部区域：测试用例选择（独占整行） -->
-        <a-card title="测试用例" class="form-card cases-card" size="small">
-          <template #extra>
-            <a-space>
-              <span class="case-count">已选择 {{ selectedCases.length }} 个用例</span>
-              <a-button type="primary" size="small" @click="showCaseSelector = true">
-                <template #icon><PlusOutlined /></template>
-                添加用例
-              </a-button>
-              <a-button size="small" @click="loadTestCases">
-                <template #icon><ReloadOutlined /></template>
-                刷新
-              </a-button>
-            </a-space>
-          </template>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="开始时间" name="startDate">
+              <a-date-picker
+                v-model:value="formData.startDate"
+                style="width: 100%"
+                placeholder="请选择开始时间"
+                @change="handleDateChange"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="结束时间" name="endDate">
+              <a-date-picker
+                v-model:value="formData.endDate"
+                style="width: 100%"
+                placeholder="请选择结束时间"
+                :disabled-date="disabledEndDate"
+                @change="handleDateChange"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-          <a-table
-            :columns="caseColumns"
-            :data-source="selectedCases"
-            :pagination="casePagination"
-            :row-key="record => record.id"
-            size="small"
-            class="selected-cases-table"
-            :scroll="{ x: 800 }"
-            @change="handleCaseTableChange"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'name'">
-                <span class="case-name-cell">{{ record.name }}</span>
-              </template>
+        <a-form-item label="计划描述" name="description">
+          <a-textarea
+            v-model:value="formData.description"
+            placeholder="请输入测试计划描述"
+            :rows="2"
+            :maxlength="1000"
+            show-count
+          />
+        </a-form-item>
+      </a-card>
+    </div>
 
-              <template v-else-if="column.key === 'priority'">
-                <a-tag :color="getPriorityColor(record.priority)">
-                  {{ getPriorityLabel(record.priority) }}
-                </a-tag>
-              </template>
-
-              <template v-else-if="column.key === 'moduleName'">
-                {{ record.moduleName || '-' }}
-              </template>
-
-              <template v-else-if="column.key === 'isAutomated'">
-                <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
-                  {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
-                </a-tag>
-              </template>
-
-              <template v-else-if="column.key === 'estimatedDuration'">
-                {{ formatDuration(record.estimatedDuration) }}
-              </template>
-
-              <template v-else-if="column.key === 'actions'">
-                <a-space>
-                  <a-button
-                    type="link"
-                    size="small"
-                    @click="viewCaseDetail(record.id)"
-                  >
-                    查看
-                  </a-button>
-                  <a-button
-                    type="link"
-                    size="small"
-                    danger
-                    @click="removeCase(record.id)"
-                  >
-                    移除
-                  </a-button>
-                </a-space>
-              </template>
-            </template>
-          </a-table>
-
-          <div v-if="selectedCases.length === 0" class="empty-state">
-            <a-empty description="尚未选择测试用例">
-              <a-button type="primary" @click="showCaseSelector = true">
-                <template #icon><PlusOutlined /></template>
-                添加用例
-              </a-button>
-            </a-empty>
-          </div>
-        </a-card>
-
-        <!-- 用例选择器 -->
-        <TestCaseSelector
-          v-model:visible="showCaseSelector"
-          :project-id="projectId"
-          :selected-cases="selectedCases"
-          @confirm="handleCasesSelected"
-        />
-
-        <!-- 通知配置弹窗 -->
-        <a-modal
-          v-model:visible="notificationModalVisible"
-          title="通知配置"
-          width="500px"
-          @ok="notificationModalVisible = false"
-          okText="确定"
-          cancelText="取消"
-        >
-          <a-form layout="vertical">
+    <!-- 可滚动中间区域：通知配置 + 测试用例选择 -->
+    <div class="scrollable-content">
+      <!-- 通知配置 -->
+      <a-card title="通知配置" class="form-card" size="small">
+        <a-row :gutter="16">
+          <a-col :span="8">
             <a-form-item label="通知方式">
               <a-checkbox-group v-model:value="formData.notificationMethods">
                 <a-checkbox value="email">邮件通知</a-checkbox>
@@ -260,7 +74,8 @@
                 <a-checkbox value="sms">短信通知</a-checkbox>
               </a-checkbox-group>
             </a-form-item>
-
+          </a-col>
+          <a-col :span="16">
             <a-form-item label="通知接收人">
               <a-select
                 v-model:value="formData.notificationRecipients"
@@ -269,37 +84,128 @@
                 style="width: 100%"
               />
             </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="通知事件">
+          <a-checkbox-group v-model:value="formData.notificationEvents">
+            <a-checkbox value="execution_start">执行开始</a-checkbox>
+            <a-checkbox value="execution_complete">执行完成</a-checkbox>
+            <a-checkbox value="execution_fail">执行失败</a-checkbox>
+            <a-checkbox value="execution_overdue">执行逾期</a-checkbox>
+          </a-checkbox-group>
+        </a-form-item>
+      </a-card>
 
-            <a-form-item label="通知事件">
-              <a-checkbox-group v-model:value="formData.notificationEvents">
-                <a-row>
-                  <a-col :span="12"><a-checkbox value="execution_start">执行开始</a-checkbox></a-col>
-                  <a-col :span="12"><a-checkbox value="execution_complete">执行完成</a-checkbox></a-col>
-                  <a-col :span="12"><a-checkbox value="execution_fail">执行失败</a-checkbox></a-col>
-                  <a-col :span="12"><a-checkbox value="execution_overdue">执行逾期</a-checkbox></a-col>
-                </a-row>
-              </a-checkbox-group>
-            </a-form-item>
-          </a-form>
-        </a-modal>
-
-        <div class="form-footer">
+      <!-- 测试用例选择 -->
+      <a-card title="测试用例" class="form-card cases-card" size="small">
+        <template #extra>
           <a-space>
-            <a-button @click="$emit('cancel')">取消</a-button>
-            <a-button type="primary" html-type="submit" :loading="saving">
-              {{ isEditMode ? '更新' : '创建' }}
+            <span class="case-count">已选择 {{ selectedCases.length }} 个用例</span>
+            <a-button type="primary" size="small" @click="showCaseSelector = true">
+              <template #icon><PlusOutlined /></template>
+              添加用例
+            </a-button>
+            <a-button size="small" @click="loadTestCases">
+              <template #icon><ReloadOutlined /></template>
+              刷新
             </a-button>
           </a-space>
+        </template>
+
+        <a-table
+          :columns="caseColumns"
+          :data-source="selectedCases"
+          :pagination="casePagination"
+          :row-key="record => record.id"
+          size="small"
+          class="selected-cases-table"
+          :scroll="{ x: 800 }"
+          @change="handleCaseTableChange"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'name'">
+              <span class="case-name-cell">{{ record.name }}</span>
+            </template>
+
+            <template v-else-if="column.key === 'priority'">
+              <a-tag :color="getPriorityColor(record.priority)">
+                {{ getPriorityLabel(record.priority) }}
+              </a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'moduleName'">
+              {{ record.moduleName || '-' }}
+            </template>
+
+            <template v-else-if="column.key === 'isAutomated'">
+              <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
+                {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
+              </a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'estimatedDuration'">
+              {{ formatDuration(record.estimatedDuration) }}
+            </template>
+
+            <template v-else-if="column.key === 'actions'">
+              <a-space>
+                <a-button
+                  type="link"
+                  size="small"
+                  @click="viewCaseDetail(record.id)"
+                >
+                  查看
+                </a-button>
+                <a-button
+                  type="link"
+                  size="small"
+                  danger
+                  @click="removeCase(record.id)"
+                >
+                  移除
+                </a-button>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+
+        <div v-if="selectedCases.length === 0" class="empty-state">
+          <a-empty description="尚未选择测试用例">
+            <a-button type="primary" @click="showCaseSelector = true">
+              <template #icon><PlusOutlined /></template>
+              添加用例
+            </a-button>
+          </a-empty>
         </div>
-      </a-form>
-    </a-spin>
+      </a-card>
+    </div>
+
+    <!-- 固定底部分页和操作按钮 -->
+    <div class="fixed-footer">
+      <a-spin :spinning="loading">
+        <a-space>
+          <a-button @click="$emit('cancel')">取消</a-button>
+          <a-button type="primary" :loading="saving" @click="handleSubmit">
+            {{ isEditMode ? '更新' : '创建' }}
+          </a-button>
+        </a-space>
+      </a-spin>
+    </div>
+
+    <!-- 用例选择器 -->
+    <TestCaseSelector
+      v-model:visible="showCaseSelector"
+      :project-id="projectId"
+      :selected-cases="selectedCases"
+      @confirm="handleCasesSelected"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined, DownOutlined, BellOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import { testCaseApi } from '@/api/testCase'
 import { testPlanApi } from '@/api/testPlan'
@@ -325,7 +231,6 @@ const loading = ref(false)
 const saving = ref(false)
 const formRef = ref()
 const showCaseSelector = ref(false)
-const notificationModalVisible = ref(false)
 
 const formData = reactive({
   name: '',
@@ -346,7 +251,7 @@ const formData = reactive({
 
 const selectedCases = ref<TestCase[]>([])
 const environments = ref<Environment[]>([])
-const modules = ref<any[]>([])  // 模块列表，用于获取模块名称
+const modules = ref<any[]>([])
 
 // 用例表格分页配置
 const casePagination = reactive({
@@ -361,33 +266,9 @@ const casePagination = reactive({
 
 // 计算属性
 const isEditMode = computed(() => !!props.planId)
-const selectedEnvironment = computed(() => 
+const selectedEnvironment = computed(() =>
   environments.value.find(env => env.id === formData.environmentId)
 )
-
-// 表单验证规则
-const formRules = {
-  name: [
-    { required: true, message: '请输入测试计划名称' },
-    { min: 2, max: 100, message: '计划名称长度应在2-100个字符之间' }
-  ],
-  planType: [
-    { required: true, message: '请选择计划类型' }
-  ],
-  startDate: [
-    { required: true, message: '请选择开始时间' }
-  ],
-  endDate: [
-    {
-      validator: (_: any, value: Dayjs) => {
-        if (value && formData.startDate && value.isBefore(formData.startDate, 'day')) {
-          return Promise.reject('结束时间不能早于开始时间')
-        }
-        return Promise.resolve()
-      }
-    }
-  ]
-}
 
 // 表格列定义
 const caseColumns = [
@@ -438,7 +319,7 @@ const caseColumns = [
 // 方法
 const loadModules = async () => {
   if (!props.projectId) return
-  
+
   try {
     const response = await projectApi.getModules(props.projectId)
     modules.value = response.modules || response || []
@@ -449,30 +330,9 @@ const loadModules = async () => {
 
 const loadEnvironments = async () => {
   try {
-    environments.value = [
-      {
-        id: '1',
-        name: '测试环境',
-        description: '开发测试环境',
-        config: {
-          '数据库地址': 'test-db.example.com',
-          'API地址': 'https://api-test.example.com'
-        },
-        createdAt: '2024-01-01T00:00:00Z',
-        updatedAt: '2024-01-01T00:00:00Z'
-      },
-      {
-        id: '2',
-        name: '预发布环境',
-        description: '预发布测试环境',
-        config: {},
-        createdAt: '2024-01-01T00:00:00Z',
-        updatedAt: '2024-01-01T00:00:00Z'
-      }
-    ]
+    environments.value = []
   } catch (error) {
     console.error('Failed to load environments:', error)
-    message.error('加载环境列表失败')
   }
 }
 
@@ -481,7 +341,6 @@ const loadPlanData = async () => {
 
   loading.value = true
   try {
-    // apiClient.get 已经返回了 response.data.data，所以这里直接使用
     const plan = await testPlanApi.getTestPlan(props.planId)
 
     if (!plan) {
@@ -491,7 +350,6 @@ const loadPlanData = async () => {
 
     console.log('加载的计划数据:', plan)
 
-    // 确保字段映射正确（兼容 camelCase 和 snake_case）
     Object.assign(formData, {
       name: plan.name || '',
       planType: plan.planType || (plan as any).plan_type || 'manual',
@@ -509,10 +367,7 @@ const loadPlanData = async () => {
       notificationEvents: plan.notificationEvents || (plan as any).notification_events || []
     })
 
-    console.log('填充后的表单数据:', formData)
-
     if (plan.testCases && Array.isArray(plan.testCases)) {
-      // 为用例添加模块名称
       const casesWithModuleName = plan.testCases.map((c: any) => {
         const caseObj: any = { ...c }
         if (!caseObj.moduleName && caseObj.moduleId) {
@@ -557,69 +412,50 @@ const handleDateChange = () => {
   formRef.value?.validateFields(['endDate'])
 }
 
-const handleEnvironmentChange = () => {
-  formData.environmentConfig = {}
-}
-
-const handleMoreMenuClick = ({ key }: { key: string }) => {
-  if (key === 'notification') {
-    notificationModalVisible.value = true
-  }
-}
-
 const handleCasesSelected = (caseIds: string[], cases: TestCase[]) => {
-  // 过滤掉已存在的用例，避免重复添加
   const existingIds = new Set(selectedCases.value.map(c => c.id))
   const newCases = cases.filter(c => !existingIds.has(c.id))
-  
-  // 为用例添加模块名称（如果还没有）
+
   const casesWithModuleName = newCases.map(c => {
     const caseObj: any = { ...c }
-    
-    // 如果没有模块名称，从模块ID获取
+
     if (!caseObj.moduleName && caseObj.moduleId) {
       const module = modules.value.find(m => m.id === caseObj.moduleId)
       if (module) {
-        // 构建模块路径
-        const modulePath = getModulePath(module)
-        caseObj.moduleName = modulePath
+        caseObj.moduleName = getModulePath(module)
       } else {
         caseObj.moduleName = '-'
       }
     } else if (!caseObj.moduleName) {
       caseObj.moduleName = '-'
     }
-    
-    // 确保其他必需字段存在
+
     if (!caseObj.priority) {
       caseObj.priority = 'P2'
     }
     if (caseObj.isAutomated === undefined && caseObj.is_automated === undefined) {
       caseObj.isAutomated = false
     }
-    
+
     return caseObj
   })
-  
-  // 创建新数组以触发响应式更新
+
   const updatedCases = [...selectedCases.value, ...casesWithModuleName]
   selectedCases.value = updatedCases
   casePagination.total = updatedCases.length
   showCaseSelector.value = false
-  
+
   if (newCases.length > 0) {
     message.success(`成功添加 ${newCases.length} 个用例`)
   }
 }
 
-// 获取模块路径的函数
 const getModulePath = (module: any): string => {
   if (!module) return '-'
-  
+
   const pathParts: string[] = [module.name]
   let currentModule = module
-  
-  // 递归向上查找父模块
+
   while (currentModule.parentId) {
     const parentModule = modules.value.find(m => m.id === currentModule.parentId)
     if (parentModule) {
@@ -629,7 +465,7 @@ const getModulePath = (module: any): string => {
       break
     }
   }
-  
+
   return pathParts.join('/')
 }
 
@@ -639,7 +475,6 @@ const handleCaseTableChange = (pag: any) => {
 }
 
 const removeCase = (caseId: string) => {
-  // 创建新数组以触发响应式更新
   const updatedCases = selectedCases.value.filter(c => c.id !== caseId)
   selectedCases.value = updatedCases
   casePagination.total = updatedCases.length
@@ -652,11 +487,10 @@ const viewCaseDetail = (caseId: string) => {
 
 const handleSubmit = async () => {
   try {
-    await formRef.value?.validateFields()
-    
+    formRef.value?.validateFields()
+
     saving.value = true
-    
-    // 构建提交数据，确保字段格式正确
+
     const submitData: any = {
       name: formData.name,
       planType: formData.planType,
@@ -675,7 +509,6 @@ const handleSubmit = async () => {
       testCaseIds: selectedCases.value.map(c => c.id)
     }
 
-    // 移除空值字段
     Object.keys(submitData).forEach(key => {
       if (submitData[key] === null || submitData[key] === undefined || submitData[key] === '') {
         if (key !== 'description' && key !== 'notes' && key !== 'testCaseIds') {
@@ -694,12 +527,11 @@ const handleSubmit = async () => {
     }
 
     message.success(isEditMode.value ? '更新成功' : '创建成功')
-    
-    // 如果是更新模式，重新加载计划数据以获取最新的用例信息
+
     if (isEditMode.value && props.planId) {
       await loadPlanData()
     }
-    
+
     emit('save', plan)
   } catch (error: any) {
     console.error('Failed to save plan:', error)
@@ -710,7 +542,6 @@ const handleSubmit = async () => {
   }
 }
 
-// 工具方法
 const getPriorityColor = (priority: string) => {
   const colors: Record<string, string> = {
     'high': 'red',
@@ -747,9 +578,7 @@ const formatDuration = (minutes: number) => {
   return `${mins}m`
 }
 
-// 生命周期
 onMounted(async () => {
-  // 先加载模块数据，因为加载计划数据时需要用到
   await loadModules()
   await Promise.all([
     loadEnvironments(),
@@ -761,7 +590,25 @@ onMounted(async () => {
 
 <style scoped>
 .test-plan-edit {
-  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  overflow: hidden;
+}
+
+/* 固定顶部区域 */
+.fixed-header {
+  flex-shrink: 0;
+  background: #f5f5f5;
+  padding: 16px;
+}
+
+/* 可滚动中间区域 */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px;
 }
 
 .form-card {
@@ -769,14 +616,7 @@ onMounted(async () => {
 }
 
 .cases-card {
-  min-height: 300px;
-}
-
-.card-title-with-extra {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
+  min-height: 200px;
 }
 
 .case-count {
@@ -803,7 +643,6 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
-/* 表格单行显示样式 */
 .selected-cases-table :deep(.ant-table-cell) {
   white-space: nowrap;
   overflow: hidden;
@@ -823,10 +662,14 @@ onMounted(async () => {
   text-align: center;
 }
 
-.form-footer {
-  margin-top: 24px;
-  padding-top: 16px;
+/* 固定底部区域 */
+.fixed-footer {
+  flex-shrink: 0;
+  background: #fff;
   border-top: 1px solid #f0f0f0;
-  text-align: right;
+  padding: 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 </style>

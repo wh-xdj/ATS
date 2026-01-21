@@ -1,5 +1,6 @@
 <template>
   <div class="test-case-edit">
+    <!-- 固定顶部区域 -->
     <div class="edit-header">
       <div class="header-title">
         <span class="title-text">{{ isNewCase ? '新建用例' : '编辑用例' }}</span>
@@ -17,7 +18,8 @@
       </div>
     </div>
 
-    <div class="edit-content">
+    <!-- 可滚动内容区域 -->
+    <div class="edit-scroll-content">
       <a-spin :spinning="loading">
         <a-form
           ref="formRef"
@@ -255,6 +257,16 @@
         </a-card>
         </a-form>
       </a-spin>
+    </div>
+
+    <!-- 固定底部区域 -->
+    <div class="edit-footer">
+      <a-space>
+        <a-button :disabled="loading" @click="handleCancel">取消</a-button>
+        <a-button type="primary" :loading="saving" :disabled="loading" @click="handleSave">
+          保存
+        </a-button>
+      </a-space>
     </div>
 
     <!-- 批量导入步骤对话框 -->
@@ -892,6 +904,7 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .edit-header {
@@ -904,6 +917,7 @@ defineExpose({
   position: sticky;
   top: 0;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .header-title {
@@ -928,11 +942,26 @@ defineExpose({
   align-items: center;
 }
 
-.edit-content {
-  padding: 24px;
+/* 可滚动内容区域 */
+.edit-scroll-content {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 24px;
+}
+
+/* 固定底部区域 */
+.edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+  background: #fff;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .info-card {

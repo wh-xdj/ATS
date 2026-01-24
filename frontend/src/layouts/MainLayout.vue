@@ -33,21 +33,18 @@
     </a-layout-sider>
 
     <!-- 主要内容区域 -->
-    <a-layout>
+    <a-layout style="background: transparent;">
       <!-- 顶部导航栏 -->
       <a-layout-header class="layout-header">
         <div class="header-left">
           <a-button
             type="text"
+            class="collapse-btn"
             :icon="h(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined)"
             @click="toggleCollapsed"
           />
 
-          <a-breadcrumb class="breadcrumb">
-            <a-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
-              {{ item.title }}
-            </a-breadcrumb-item>
-          </a-breadcrumb>
+          <div class="page-title">{{ route.meta?.title || '仪表盘' }}</div>
         </div>
 
         <div class="header-right">
@@ -99,7 +96,11 @@
 
       <!-- 页面内容 -->
       <a-layout-content class="layout-content">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="fade-transform" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </a-layout-content>
     </a-layout>
   </a-layout>
@@ -291,67 +292,126 @@ onMounted(async () => {
 <style scoped>
 .main-layout {
   height: 100vh;
+  background: #f0f2f5;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(124, 58, 237, 0.05) 0px, transparent 50%);
 }
 
 .layout-sider {
-  background: #fff;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  margin: 16px 8px 16px 16px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
 }
 
 .logo {
-  height: 64px;
+  height: 80px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid #f0f0f0;
-  margin: 0;
-}
-
-.logo img {
-  width: 32px;
-  height: 32px;
-  margin-right: 8px;
+  padding: 0 24px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .logo span {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1890ff;
+  font-size: 18px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
 }
 
 .layout-menu {
+  background: transparent !important;
   border-right: none;
-  padding-top: 16px;
+}
+
+:deep(.ant-menu-item) {
+  margin: 6px 14px !important;
+  border-radius: 14px !important;
+  width: calc(100% - 28px) !important;
+  height: 48px !important;
+  line-height: 48px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+:deep(.ant-menu-item:hover) {
+  background: rgba(99, 102, 241, 0.05) !important;
+  transform: translateX(4px);
+}
+
+:deep(.ant-menu-item-selected) {
+  background: rgba(99, 102, 241, 0.1) !important;
+  /* box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.4); */
+}
+
+:deep(.ant-menu-item-selected),
+:deep(.ant-menu-item-selected .ant-menu-title-content),
+:deep(.ant-menu-item-selected .anticon) {
+  color: #6366f1 !important;
+  font-weight: 600;
+}
+
+/* 移除 Ant Design 默认的选中右侧边框线 */
+:deep(.ant-menu-rtl .ant-menu-item::after),
+:deep(.ant-menu-item::after) {
+  border-right: none !important;
+}
+
+/* 修复点击时的全白或过亮效果 */
+:deep(.ant-menu-item:active),
+:deep(.ant-menu-item-selected:active) {
+  background: rgba(99, 102, 241, 0.2) !important;
 }
 
 .layout-header {
-  background: #fff;
+  background: transparent !important;
   padding: 0 24px;
+  height: 88px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.breadcrumb {
-  margin-left: 24px;
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-left: 16px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 6px 12px;
+  border-radius: 50px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+}
+
+.collapse-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .layout-content {
-  background: #f5f5f5;
-  padding: 24px;
-  overflow: hidden;
-  height: calc(100vh - 64px);
+  padding: 0 24px 24px 24px;
+  overflow-y: auto;
+  height: calc(100vh - 88px);
 }
 
 .notification-item {

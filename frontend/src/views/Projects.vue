@@ -55,11 +55,21 @@
         >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'">
-                <a @click="viewProject(record.id)">{{ record.name }}</a>
+                <a @click="viewProject(record.id)" class="project-name-cell">
+                  <div class="project-icon">
+                    <ProjectOutlined />
+                  </div>
+                  <span class="project-name-text">{{ record.name }}</span>
+                </a>
               </template>
 
               <template v-else-if="column.key === 'status'">
-                <a-tag :color="getStatusColor(record.status)">
+                <a-tag :color="getStatusColor(record.status)" class="status-tag">
+                  <template #icon>
+                    <CheckCircleOutlined v-if="record.status === 'active'" />
+                    <InboxOutlined v-else-if="record.status === 'archived'" />
+                    <StopOutlined v-else />
+                  </template>
                   {{ getStatusText(record.status) }}
                 </a-tag>
               </template>
@@ -69,19 +79,31 @@
               </template>
 
               <template v-else-if="column.key === 'createdBy'">
-                {{ record.createdByName || 'Administrator' }}
+                <a-space :size="4">
+                  <UserOutlined style="color: #bfbfbf" />
+                  {{ record.createdByName || 'Administrator' }}
+                </a-space>
               </template>
 
               <template v-else-if="column.key === 'updatedBy'">
-                {{ record.updatedByName || record.createdByName || 'Administrator' }}
+                <a-space :size="4">
+                  <UserOutlined style="color: #bfbfbf" />
+                  {{ record.updatedByName || record.createdByName || 'Administrator' }}
+                </a-space>
               </template>
 
               <template v-else-if="column.key === 'updatedAt'">
-                {{ formatDateTime(record.updatedAt) }}
+                <a-space :size="4">
+                  <ClockCircleOutlined style="color: #bfbfbf" />
+                  {{ formatDateTime(record.updatedAt) }}
+                </a-space>
               </template>
 
               <template v-else-if="column.key === 'createdAt'">
-                {{ formatDateTime(record.createdAt) }}
+                <a-space :size="4">
+                  <ClockCircleOutlined style="color: #bfbfbf" />
+                  {{ formatDateTime(record.createdAt) }}
+                </a-space>
               </template>
 
               <template v-else-if="column.key === 'actions'">
@@ -94,13 +116,20 @@
                     <template #icon><MoreOutlined /></template>
                   </a-button>
                   <template #overlay>
-                      <a-menu @click="handleMenuClick($event, record)">
-                      <a-menu-item key="members">成员管理</a-menu-item>
+                    <a-menu @click="handleMenuClick($event, record)">
+                      <a-menu-item key="members">
+                        <template #icon><TeamOutlined /></template>
+                        成员管理
+                      </a-menu-item>
                       <a-menu-divider />
                         <a-menu-item key="archive" v-if="record.status === 'active'">
+                        <template #icon><InboxOutlined /></template>
                         归档
                       </a-menu-item>
-                      <a-menu-item key="delete" danger>删除</a-menu-item>
+                      <a-menu-item key="delete" danger>
+                        <template #icon><DeleteOutlined /></template>
+                        删除
+                      </a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>
@@ -175,7 +204,14 @@ import {
   PlusOutlined,
   MoreOutlined,
   UnorderedListOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  ProjectOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
+  InboxOutlined,
+  UserOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons-vue'
 import { useProjectStore } from '@/stores/project'
 import { projectApi } from '@/api/project'
@@ -543,6 +579,49 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.project-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1890ff;
+  transition: all 0.3s;
+}
+
+.project-name-cell:hover {
+  color: #40a9ff;
+}
+
+.project-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e6f7ff;
+  color: #1890ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.3s;
+}
+
+.project-name-cell:hover .project-icon {
+  background: #1890ff;
+  color: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+.project-name-text {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.status-tag {
+  min-width: 80px;
+  text-align: center;
+  border-radius: 12px;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .content-header {
@@ -554,5 +633,23 @@ onMounted(() => {
   .content-header > * {
     width: 100%;
   }
+}
+
+/* 修复表格固定列重叠问题 */
+:deep(.ant-table-cell-fix-right),
+:deep(.ant-table-cell-fix-left) {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-right),
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
+  background: #fafafa !important;
+  z-index: 20 !important;
+}
+
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right),
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-left) {
+  background: #fafafa !important;
 }
 </style>

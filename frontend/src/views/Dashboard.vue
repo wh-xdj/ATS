@@ -24,65 +24,55 @@
 
     <div class="dashboard-content">
       <!-- 概览统计卡片 -->
-      <a-row :gutter="16" class="overview-cards">
-        <a-col :xs="24" :sm="12" :lg="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="项目总数"
-              :value="overviewStats.totalProjects"
-              :value-style="{ color: '#1890ff' }"
-            >
-              <template #prefix>
-                <ProjectOutlined />
-              </template>
-            </a-statistic>
-          </a-card>
+      <a-row :gutter="20" class="overview-cards">
+        <a-col :xs="24" :sm="12" :lg="6" class="animate-fade-up">
+          <div class="stat-card-custom">
+            <div class="icon-box primary">
+              <ProjectOutlined />
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">项目总数</div>
+              <div class="stat-value text-gradient">{{ overviewStats.totalProjects }}</div>
+            </div>
+          </div>
         </a-col>
-        <a-col :xs="24" :sm="12" :lg="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="活跃计划"
-              :value="overviewStats.activePlans"
-              :value-style="{ color: '#52c41a' }"
-            >
-              <template #prefix>
-                <ScheduleOutlined />
-              </template>
-            </a-statistic>
-          </a-card>
+        <a-col :xs="24" :sm="12" :lg="6" class="animate-fade-up delay-1">
+          <div class="stat-card-custom">
+            <div class="icon-box success">
+              <ScheduleOutlined />
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">活跃计划</div>
+              <div class="stat-value">{{ overviewStats.activePlans }}</div>
+            </div>
+          </div>
         </a-col>
-        <a-col :xs="24" :sm="12" :lg="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="执行成功率"
-              :value="overviewStats.successRate"
-              suffix="%"
-              :precision="1"
-              :value-style="{ color: overviewStats.successRate >= 80 ? '#52c41a' : '#faad14' }"
-            >
-              <template #prefix>
-                <CheckCircleOutlined />
-              </template>
-            </a-statistic>
-          </a-card>
+        <a-col :xs="24" :sm="12" :lg="6" class="animate-fade-up delay-2">
+          <div class="stat-card-custom">
+            <div class="icon-box warning">
+              <CheckCircleOutlined />
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">执行成功率</div>
+              <div class="stat-value">{{ overviewStats.successRate.toFixed(1) }}%</div>
+            </div>
+          </div>
         </a-col>
-        <a-col :xs="24" :sm="12" :lg="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="本月用例数"
-              :value="overviewStats.monthlyCases"
-              :value-style="{ color: '#722ed1' }"
-            >
-              <template #prefix>
-                <ExperimentOutlined />
-              </template>
-            </a-statistic>
-          </a-card>
+        <a-col :xs="24" :sm="12" :lg="6" class="animate-fade-up delay-3">
+          <div class="stat-card-custom">
+            <div class="icon-box purple">
+              <ExperimentOutlined />
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">本月用例数</div>
+              <div class="stat-value">{{ overviewStats.monthlyCases }}</div>
+            </div>
+          </div>
         </a-col>
       </a-row>
 
       <!-- 图表区域 -->
-      <a-row :gutter="16" class="chart-section">
+      <a-row :gutter="20" class="chart-section animate-fade-up delay-4">
         <!-- 测试趋势图 -->
         <a-col :xs="24" :lg="12">
           <a-card title="测试趋势" class="chart-card">
@@ -123,34 +113,27 @@
         <!-- 最近活动 -->
         <a-col :xs="24" :lg="8">
           <a-card title="最近活动" class="activity-card">
+            <template #extra>
+              <a-button type="link" size="small">全部活动</a-button>
+            </template>
             <a-list
               :data-source="recentActivities"
               :loading="activitiesLoading"
               size="small"
+              class="activity-list"
             >
               <template #renderItem="{ item }">
-                <a-list-item>
-                  <a-list-item-meta>
-                    <template #avatar>
-                      <a-avatar
-                        :style="{ backgroundColor: getActivityColor(item.type) }"
-                        size="small"
-                      >
-                        <template #icon>
-                          <component :is="getActivityIcon(item.type)" />
-                        </template>
-                      </a-avatar>
-                    </template>
-                    <template #title>
-                      <span class="activity-title">{{ item.title }}</span>
-                    </template>
-                    <template #description>
-                      <div class="activity-description">
-                        <span>{{ item.description }}</span>
-                        <div class="activity-time">{{ formatRelativeTime(item.timestamp) }}</div>
-                      </div>
-                    </template>
-                  </a-list-item-meta>
+                <a-list-item class="activity-item-custom">
+                  <div class="activity-icon-wrapper" :style="{ background: getActivityColorAlpha(item.type) }">
+                    <component :is="getActivityIcon(item.type)" :style="{ color: getActivityColor(item.type) }" />
+                  </div>
+                  <div class="activity-content-custom">
+                    <div class="activity-header">
+                      <span class="activity-title-text">{{ item.title }}</span>
+                      <span class="activity-time-text">{{ formatRelativeTime(item.timestamp) }}</span>
+                    </div>
+                    <div class="activity-desc-text">{{ item.description }}</div>
+                  </div>
                 </a-list-item>
               </template>
             </a-list>
@@ -624,21 +607,36 @@ const renderTrendChart = (data: any) => {
           type: 'line',
           data: data.executions,
           smooth: true,
-          itemStyle: { color: '#1890ff' }
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 4, color: '#6366f1' },
+          itemStyle: { color: '#6366f1', borderWidth: 2, borderColor: '#fff' },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(99, 102, 241, 0.2)' },
+              { offset: 1, color: 'rgba(99, 102, 241, 0)' }
+            ])
+          }
         },
         {
           name: '通过',
           type: 'line',
           data: data.passed,
           smooth: true,
-          itemStyle: { color: '#52c41a' }
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 4, color: '#22c55e' },
+          itemStyle: { color: '#22c55e', borderWidth: 2, borderColor: '#fff' }
         },
         {
           name: '失败',
           type: 'line',
           data: data.failed,
           smooth: true,
-          itemStyle: { color: '#ff4d4f' }
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 4, color: '#ef4444' },
+          itemStyle: { color: '#ef4444', borderWidth: 2, borderColor: '#fff' }
         }
       ]
     }
@@ -667,16 +665,33 @@ const renderStatusChart = (data: any) => {
         {
           name: '用例状态',
           type: 'pie',
-          radius: '70%',
-          center: ['60%', '50%'],
-          data: data,
+          radius: ['40%', '70%'],
+          avoidLabelOverlap: false,
+          itemStyle: {
+            borderRadius: 10,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: {
+            show: false,
+            position: 'center'
+          },
           emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            label: {
+              show: true,
+              fontSize: '18',
+              fontWeight: 'bold'
             }
-          }
+          },
+          labelLine: {
+            show: false
+          },
+          data: data.map((item: any, index: number) => ({
+            ...item,
+            itemStyle: {
+              color: ['#6366f1', '#22c55e', '#f59e0b', '#ef4444'][index] || '#64748b'
+            }
+          }))
         }
       ]
     }
@@ -809,12 +824,22 @@ const generateProjectReport = (projectId: string) => {
 // 工具方法
 const getActivityColor = (type: string) => {
   const colors = {
-    'execution': '#1890ff',
-    'case': '#52c41a',
-    'plan': '#722ed1',
-    'report': '#fa8c16'
+    'execution': '#6366f1',
+    'case': '#22c55e',
+    'plan': '#a855f7',
+    'report': '#f59e0b'
   }
-  return colors[type as keyof typeof colors] || '#666'
+  return colors[type as keyof typeof colors] || '#64748b'
+}
+
+const getActivityColorAlpha = (type: string) => {
+  const colors = {
+    'execution': 'rgba(99, 102, 241, 0.1)',
+    'case': 'rgba(34, 197, 94, 0.1)',
+    'plan': 'rgba(168, 85, 247, 0.1)',
+    'report': 'rgba(245, 158, 11, 0.1)'
+  }
+  return colors[type as keyof typeof colors] || 'rgba(100, 116, 139, 0.1)'
 }
 
 const getActivityIcon = (type: string) => {
@@ -855,25 +880,154 @@ onMounted(() => {
 
 <style scoped>
 .dashboard-container {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f5f5f5;
-  overflow: hidden;
+  min-height: 100%;
 }
 
 .dashboard-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
+  padding: 0;
 }
 
 .overview-cards {
+  margin-bottom: 28px;
+}
+
+.stat-card-custom {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card-custom:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.icon-box.primary { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+.icon-box.success { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.icon-box.warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.icon-box.purple { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: -1px;
+}
+
+.chart-card {
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px);
   margin-bottom: 24px;
 }
 
-.stat-card {
-  text-align: center;
+:deep(.ant-card-head) {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  padding: 0 24px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.ant-card-head-title) {
+  font-weight: 700;
+  font-size: 17px;
+  color: #1e293b;
+}
+
+.chart-container {
+  width: 100%;
+  height: 320px;
+  padding: 12px;
+}
+
+.activity-item-custom {
+  padding: 12px 16px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px;
+  border: none !important;
+  margin-bottom: 8px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+.activity-item-custom:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.activity-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.activity-content-custom {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.activity-title-text {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.activity-time-text {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.activity-desc-text {
+  font-size: 13px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chart-section {

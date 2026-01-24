@@ -25,7 +25,16 @@
             @change="handleTableChange"
           >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'tags'">
+            <template v-if="column.key === 'name'">
+              <div class="env-name-cell">
+                <div class="env-icon" :class="{ online: record.isOnline }">
+                  <DesktopOutlined />
+                </div>
+                <span class="env-name">{{ record.name }}</span>
+              </div>
+            </template>
+
+            <template v-else-if="column.key === 'tags'">
               <a-space v-if="record.tags" wrap :size="4">
                 <a-tag v-for="tag in (record.tags || '').split(',').filter(t => t.trim())" :key="tag.trim()" size="small">
                   {{ tag.trim() }}
@@ -35,20 +44,30 @@
             </template>
 
             <template v-else-if="column.key === 'remoteWorkDir'">
-              <span v-if="record.remoteWorkDir" :title="record.remoteWorkDir">{{ record.remoteWorkDir }}</span>
+              <span v-if="record.remoteWorkDir" :title="record.remoteWorkDir" style="color: #8c8c8c; font-family: monospace">
+                <FolderOutlined /> {{ record.remoteWorkDir }}
+              </span>
               <span v-else style="color: #999">-</span>
             </template>
 
             <template v-else-if="column.key === 'isOnline'">
-              <a-space>
-                <a-tag :color="record.isOnline ? (record.isBusy ? 'orange' : 'green') : 'red'">
+              <div class="status-indicator">
+                <span class="status-dot" :class="{ 
+                  online: record.isOnline && !record.isBusy,
+                  busy: record.isOnline && record.isBusy,
+                  offline: !record.isOnline 
+                }"></span>
+                <span class="status-text">
                   {{ record.isOnline ? (record.isBusy ? '忙碌中' : '在线') : '离线' }}
-                </a-tag>
-              </a-space>
+                </span>
+              </div>
             </template>
 
             <template v-else-if="column.key === 'maxConcurrentTasks'">
-              <span>{{ record.maxConcurrentTasks || 1 }}</span>
+              <a-tag color="blue">
+                <template #icon><DashboardOutlined /></template>
+                {{ record.maxConcurrentTasks || 1 }}
+              </a-tag>
             </template>
 
             <template v-else-if="column.key === 'status'">
@@ -584,7 +603,14 @@ import {
   UploadOutlined,
   FolderAddOutlined,
   FolderOutlined,
-  FileOutlined
+  FileOutlined,
+  DesktopOutlined,
+  WifiOutlined,
+  GlobalOutlined,
+  DashboardOutlined,
+  LaptopOutlined,
+  CodeOutlined,
+  HddOutlined
 } from '@ant-design/icons-vue'
 import { environmentApi } from '@/api/environment'
 import { testSuiteApi } from '@/api/testSuite'
@@ -990,7 +1016,7 @@ const workspaceColumns = [
     title: '修改时间',
     key: 'modified',
     dataIndex: 'modified',
-    width: 160
+    width: 200
   },
   {
     title: '操作',
@@ -1222,7 +1248,7 @@ const executionColumns = [
     title: '执行时间',
     key: 'executedAt',
     dataIndex: 'executedAt',
-    width: 160
+    width: 200
   },
   {
     title: '执行耗时',
@@ -1492,6 +1518,88 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+.env-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.env-icon {
+  width: 32px;
+  height: 32px;
+  background: #f5f5f5;
+  color: #bfbfbf;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.3s;
+}
+
+.env-icon.online {
+  background: #f6ffed;
+  color: #52c41a;
+  box-shadow: 0 0 8px rgba(82, 196, 26, 0.2);
+}
+
+.env-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* 状态呼吸灯 */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #d9d9d9;
+  position: relative;
+}
+
+.status-dot.online {
+  background-color: #52c41a;
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
+}
+
+.status-dot.online::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: inherit;
+  transform: translate(-50%, -50%);
+  animation: ripple 1.5s infinite;
+}
+
+.status-dot.busy {
+  background-color: #faad14;
+}
+
+.status-dot.offline {
+  background-color: #ff4d4f;
+}
+
+@keyframes ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3);
+    opacity: 0;
+  }
+}
+
 .execution-log {
   background: #f5f5f5;
   padding: 16px;
@@ -1533,6 +1641,24 @@ onMounted(() => {
   .environments-content {
     margin-top: 12px;
   }
+}
+
+/* 修复表格固定列重叠问题 */
+:deep(.ant-table-cell-fix-right),
+:deep(.ant-table-cell-fix-left) {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-right),
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
+  background: #fafafa !important;
+  z-index: 20 !important;
+}
+
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right),
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-left) {
+  background: #fafafa !important;
 }
 </style>
 

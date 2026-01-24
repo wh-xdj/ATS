@@ -100,24 +100,44 @@
           size="middle"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'planName'">
+            <template v-if="column.key === 'name'">
+              <div class="suite-name-cell">
+                <div class="suite-icon">
+                  <FileTextOutlined />
+                </div>
+                <span class="suite-name-text">{{ record.name }}</span>
+              </div>
+            </template>
+
+            <template v-else-if="column.key === 'planName'">
               <a @click="viewPlan(record.planId)">{{ record.planName || '-' }}</a>
             </template>
 
             <template v-else-if="column.key === 'status'">
-              <a-tag :color="getStatusColor(record.status)">
+              <a-tag :color="getStatusColor(record.status)" class="status-tag">
+                <template #icon>
+                  <ClockCircleOutlined v-if="record.status === 'pending'" />
+                  <PlayCircleOutlined v-else-if="record.status === 'running'" spin />
+                  <CheckCircleOutlined v-else-if="record.status === 'completed'" />
+                  <CloseCircleOutlined v-else-if="record.status === 'failed'" />
+                </template>
                 {{ getStatusLabel(record.status) }}
               </a-tag>
             </template>
 
             <template v-else-if="column.key === 'caseIds'">
-              <span>{{ record.caseIds?.length || 0 }} 个用例</span>
+              <a-tag color="blue">{{ record.caseIds?.length || 0 }} 个用例</a-tag>
             </template>
 
             <template v-else-if="column.key === 'gitRepoUrl'">
-              <span :title="record.gitRepoUrl" style="max-width: 200px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                {{ record.gitRepoUrl || '-' }}
-              </span>
+              <div class="git-info">
+                <GithubOutlined v-if="record.gitRepoUrl && record.gitRepoUrl.includes('github')" />
+                <GitlabOutlined v-else-if="record.gitRepoUrl && record.gitRepoUrl.includes('gitlab')" />
+                <CodeOutlined v-else />
+                <span :title="record.gitRepoUrl" class="git-url">
+                  {{ record.gitRepoUrl || '-' }}
+                </span>
+              </div>
             </template>
 
             <template v-else-if="column.key === 'actions'">
@@ -344,7 +364,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
   PlusOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  GithubOutlined,
+  GitlabOutlined,
+  CodeOutlined,
+  PlayCircleOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  FileTextOutlined
 } from '@ant-design/icons-vue'
 import { testSuiteApi, type TestSuite, type TestSuiteExecution } from '@/api/testSuite'
 import { testPlanApi } from '@/api/testPlan'
@@ -1314,6 +1342,47 @@ onUnmounted(() => {
   height: calc(100% - 80px);
 }
 
+.suite-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.suite-icon {
+  width: 24px;
+  height: 24px;
+  background: #f0f5ff;
+  border-radius: 4px;
+  color: #2f54eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.suite-name-text {
+  font-weight: 500;
+}
+
+.status-tag {
+  border-radius: 12px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.git-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #595959;
+}
+
+.git-url {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .execution-log {
   background: #f5f5f5;
   padding: 16px;
@@ -1385,6 +1454,24 @@ onUnmounted(() => {
   text-align: center;
   color: #858585;
   padding: 40px;
+}
+
+/* 修复表格固定列重叠问题 */
+:deep(.ant-table-cell-fix-right),
+:deep(.ant-table-cell-fix-left) {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-right),
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
+  background: #fafafa !important;
+  z-index: 20 !important;
+}
+
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right),
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-left) {
+  background: #fafafa !important;
 }
 </style>
 

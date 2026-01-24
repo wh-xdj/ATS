@@ -88,16 +88,30 @@
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
-              <a @click="viewReportDetail(record.id)" class="report-name-link">
-                {{ record.name }}
-              </a>
-              <div class="report-subtitle">
-                {{ record.reportNumber }}
+              <div class="report-name-cell">
+                <div class="report-icon" :class="`icon-${record.format}`">
+                  <FilePdfOutlined v-if="record.format === 'pdf'" />
+                  <FileExcelOutlined v-else-if="record.format === 'excel'" />
+                  <FileTextOutlined v-else />
+                </div>
+                <div class="report-info">
+                  <a @click="viewReportDetail(record.id)" class="report-name-link">
+                    {{ record.name }}
+                  </a>
+                  <div class="report-subtitle">
+                    {{ record.reportNumber }}
+                  </div>
+                </div>
               </div>
             </template>
 
             <template v-else-if="column.key === 'type'">
               <a-tag :color="getTypeColor(record.type)">
+                <template #icon>
+                  <PieChartOutlined v-if="record.type === 'summary'" />
+                  <BarChartOutlined v-else-if="record.type === 'detailed'" />
+                  <LineChartOutlined v-else-if="record.type === 'trend'" />
+                </template>
                 {{ getTypeLabel(record.type) }}
               </a-tag>
             </template>
@@ -320,7 +334,13 @@ import {
   PlusOutlined,
   ReloadOutlined,
   DownloadOutlined,
-  DownOutlined
+  DownOutlined,
+  FilePdfOutlined,
+  FileExcelOutlined,
+  FileTextOutlined,
+  PieChartOutlined,
+  BarChartOutlined,
+  LineChartOutlined
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import dashboardApi from '@/api/dashboard'
@@ -820,6 +840,44 @@ onMounted(() => {
   min-height: 400px;
 }
 
+.report-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+.report-icon.icon-pdf {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.report-icon.icon-excel {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.report-icon.icon-html {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+}
+
 .report-name-link {
   color: #1890ff;
   font-weight: 500;
@@ -1095,5 +1153,23 @@ onMounted(() => {
   .ant-drawer-body {
     padding: 12px;
   }
+}
+
+/* 修复表格固定列重叠问题 */
+:deep(.ant-table-cell-fix-right),
+:deep(.ant-table-cell-fix-left) {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-right),
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
+  background: #fafafa !important;
+  z-index: 20 !important;
+}
+
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right),
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-left) {
+  background: #fafafa !important;
 }
 </style>

@@ -185,30 +185,36 @@
               </template>
 
               <template v-else-if="column.key === 'name'">
-                <span :title="record.name">{{ record.name }}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <BugOutlined v-if="record.type === 'bug'" style="color: #ff4d4f" />
+                  <ThunderboltOutlined v-else-if="record.type === 'interface'" style="color: #1890ff" />
+                  <AppstoreOutlined v-else-if="record.type === 'ui'" style="color: #722ed1" />
+                  <FileTextOutlined v-else style="color: #8c8c8c" />
+                  <span :title="record.name">{{ record.name }}</span>
+                </div>
               </template>
 
               <template v-else-if="column.key === 'level'">
                 <a-tag :color="getLevelColor(record.priority)">
+                  <template #icon>
+                    <FlagOutlined />
+                  </template>
                   {{ record.priority }}
                 </a-tag>
               </template>
 
               <template v-else-if="column.key === 'reviewResult'">
                 <a-tag :color="getReviewResultColor((record as any).reviewResult || 'not_reviewed')">
+                  <template #icon>
+                    <CheckSquareOutlined v-if="(record as any).reviewResult === 'passed'" />
+                  </template>
                   {{ getReviewResultLabel((record as any).reviewResult || 'not_reviewed') }}
                 </a-tag>
               </template>
 
-              <template v-else-if="column.key === 'executionResult'">
-                <a-tag :color="getExecutionResultColor(record.status)">
-                  {{ getExecutionResultLabel(record.status) }}
-                </a-tag>
-              </template>
-
               <template v-else-if="column.key === 'modulePath'">
-                <span :title="getModuleName(record.moduleId) || '未规划用例'">
-                  {{ getModuleName(record.moduleId) || '未规划用例' }}
+                <span :title="getModuleName(record.moduleId) || '未规划用例'" style="color: #8c8c8c">
+                  <FolderOutlined /> {{ getModuleName(record.moduleId) || '未规划用例' }}
                 </span>
               </template>
 
@@ -216,7 +222,7 @@
                 <span v-if="(record.tags || []).length === 0">-</span>
                 <a-space v-else wrap :size="2">
                   <a-tag v-for="tag in (record.tags || []).slice(0, 2)" :key="tag" size="small">
-                    {{ tag }}
+                    <TagOutlined /> {{ tag }}
                   </a-tag>
                   <a-tag v-if="(record.tags || []).length > 2" size="small" color="default">
                     +{{ (record.tags || []).length - 2 }}
@@ -225,9 +231,12 @@
               </template>
 
               <template v-else-if="column.key === 'isAutomated'">
-                <a-tag :color="(record.isAutomated ?? record.is_automated) ? 'green' : 'default'">
-                  {{ (record.isAutomated ?? record.is_automated) ? '是' : '否' }}
-                </a-tag>
+                <div v-if="(record.isAutomated ?? record.is_automated)" style="color: #52c41a">
+                  <CodeOutlined /> 是
+                </div>
+                <div v-else style="color: #bfbfbf">
+                  <BlockOutlined /> 否
+                </div>
               </template>
 
               <template v-else-if="column.key === 'createdBy'">
@@ -398,7 +407,16 @@ import {
   FolderOutlined,
   FileOutlined,
   FileTextOutlined,
-  SettingOutlined
+  SettingOutlined,
+  TagOutlined,
+  BugOutlined,
+  CheckSquareOutlined,
+  FlagOutlined,
+  ThunderboltOutlined,
+  CodeOutlined,
+  BlockOutlined,
+  AppstoreOutlined,
+  BarsOutlined
 } from '@ant-design/icons-vue'
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'
 import TestCaseDetail from '@/components/TestCase/TestCaseDetail.vue'
@@ -735,7 +753,7 @@ const allColumns = [
     title: '创建时间',
     dataIndex: 'createdAt',
     key: 'createdAt',
-    width: 160,
+    width: 200,
     sorter: true,
     defaultVisible: false
   },
@@ -751,7 +769,7 @@ const allColumns = [
     title: '更新时间',
     dataIndex: 'updatedAt',
     key: 'updatedAt',
-    width: 160,
+    width: 200,
     sorter: true,
     defaultVisible: true
   }
@@ -2275,5 +2293,23 @@ onUnmounted(() => {
   .toolbar > * {
     width: 100%;
   }
+}
+
+/* 修复表格固定列重叠问题 */
+:deep(.ant-table-cell-fix-right),
+:deep(.ant-table-cell-fix-left) {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-right),
+:deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
+  background: #fafafa !important;
+  z-index: 20 !important;
+}
+
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right),
+:deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-left) {
+  background: #fafafa !important;
 }
 </style>

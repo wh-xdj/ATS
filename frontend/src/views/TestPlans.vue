@@ -116,24 +116,43 @@
                 @click="viewPlanExecution(record)"
                 class="plan-name-link"
               >
-                {{ record.name }}
+                <div class="plan-icon">
+                  <ExperimentOutlined />
+                </div>
+                <div class="plan-info">
+                  <span class="plan-name">{{ record.name }}</span>
+                  <div class="plan-subtitle">
+                    {{ record.planNumber }}
+                  </div>
+                </div>
               </a>
               <span v-else class="plan-name-disabled">
-                {{ record.name }}
+                <div class="plan-icon icon-disabled">
+                  <ExperimentOutlined />
+                </div>
+                <div class="plan-info">
+                  <span class="plan-name">{{ record.name }}</span>
+                  <div class="plan-subtitle">
+                    {{ record.planNumber }}
+                  </div>
+                </div>
               </span>
-              <div class="plan-subtitle">
-                {{ record.planNumber }}
-              </div>
             </template>
 
             <template v-else-if="column.key === 'status'">
-              <a-tag :color="getStatusColor(record.status)">
+              <a-tag :color="getStatusColor(record.status)" class="status-tag">
+                <template #icon>
+                  <ClockCircleOutlined v-if="record.status === 'not_started'" />
+                  <PlayCircleOutlined v-else-if="record.status === 'running'" />
+                  <CheckCircleOutlined v-else-if="record.status === 'completed'" />
+                  <PauseCircleOutlined v-else-if="record.status === 'paused'" />
+                </template>
                 {{ getStatusLabel(record.status) }}
               </a-tag>
             </template>
 
             <template v-else-if="column.key === 'planType'">
-              <a-tag :color="getTypeColor(record.planType)">
+              <a-tag :color="getTypeColor(record.planType)" class="type-tag">
                 {{ getTypeLabel(record.planType) }}
               </a-tag>
             </template>
@@ -318,6 +337,16 @@ import {
   PlusOutlined,
   ReloadOutlined,
   DownloadOutlined,
+  ScheduleOutlined,
+  ExperimentOutlined,
+  PieChartOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
+  MoreOutlined
 } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
 import type { TestPlan, Environment, Project } from '@/types'
@@ -788,7 +817,7 @@ const getTypeColor = (type: string) => {
   const colorMap: Record<string, string> = {
     manual: 'blue',
     automated: 'green',
-    mixed: 'purple'
+    mixed: '#722ed1'
   }
   return colorMap[type] || 'default'
 }
@@ -974,25 +1003,80 @@ defineExpose({
 }
 
 .plan-name-link {
-  font-weight: 500;
-  color: #1890ff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
-}
-
-.plan-name-link:hover {
-  color: #40a9ff;
+  text-decoration: none;
 }
 
 .plan-name-disabled {
-  font-weight: 500;
-  color: #8c8c8c;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   cursor: not-allowed;
+}
+
+.plan-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #e6f7ff;
+  color: #1890ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.plan-name-link:hover .plan-icon {
+  background: #1890ff;
+  color: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+.plan-icon.icon-disabled {
+  background: #f5f5f5;
+  color: #d9d9d9;
+}
+
+.plan-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.plan-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #1890ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan-name-disabled .plan-name {
+  color: #8c8c8c;
 }
 
 .plan-subtitle {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: 2px;
+}
+
+.status-tag {
+  border-radius: 12px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.type-tag {
+  border-radius: 4px;
 }
 
 .progress-wrapper {
@@ -1076,6 +1160,30 @@ defineExpose({
 .plans-card :deep(.ant-table) {
   table-layout: fixed;
 }
+
+/* 修复表格固定列重叠问题 - 增强版 */
+.plans-card :deep(.ant-table-cell-fix-right) {
+  background: #fff !important;
+  z-index: 10 !important; /* 提高层级 */
+}
+
+/* 表头固定列背景色需要与表头一致 */
+.plans-card :deep(.ant-table-thead > tr > th.ant-table-cell-fix-right) {
+  background: #fafafa !important; /* 默认表头背景 */
+  z-index: 20 !important; /* 表头层级更高 */
+}
+
+/* Hover 状态下的背景色 */
+.plans-card :deep(.ant-table-tbody > tr:hover > td.ant-table-cell-fix-right) {
+  background: #fafafa !important;
+}
+
+/* 兼容可能存在的其他固定列类名 */
+.plans-card :deep(.ant-table-fix-right),
+.plans-card :deep(.ant-table-fixed-right) {
+  background: #fff !important;
+}
+
 
 .plans-card :deep(.ant-table-thead > tr > th) {
   white-space: nowrap;

@@ -222,7 +222,7 @@ const executionColumns = [
   {
     title: '执行时间',
     key: 'executedAt',
-    width: 150
+    width: 200
   },
   {
     title: '操作',
@@ -285,7 +285,7 @@ const getTypeColor = (type: string) => {
   const colorMap: Record<string, string> = {
     manual: 'blue',
     automated: 'green',
-    mixed: 'purple'
+    mixed: '#722ed1'
   }
   return colorMap[type] || 'default'
 }

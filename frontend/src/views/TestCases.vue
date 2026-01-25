@@ -414,8 +414,6 @@ import {
   FlagOutlined,
   ThunderboltOutlined,
   CodeOutlined,
-  BlockOutlined,
-  AppstoreOutlined,
   BarsOutlined
 } from '@ant-design/icons-vue'
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'

@@ -104,6 +104,10 @@ class TestCaseUpdate(BaseModel):
     priority: Optional[str] = None
     precondition: Optional[str] = None
     steps: Optional[List[Dict[str, Any]]] = None
+    requirement_ref: Optional[str] = None
+    module_path: Optional[str] = None
+    level: Optional[str] = None
+    executor_id: Optional[str] = None
     status: Optional[str] = None
     tags: Optional[List[str]] = None
     module_id: Optional[str] = None  # 支持移动用例到不同模块

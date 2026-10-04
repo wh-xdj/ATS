@@ -10,7 +10,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import traceback
 from config import settings
 from database import engine, Base, SessionLocal
-from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace, test_suites
+from api.v1 import auth, users, dashboard, projects, environments, test_cases, test_plans, executions, workspace, test_suites, notifications, reports
 from api.v1.websocket import websocket_endpoint, frontend_manager
 from core.security import verify_token
 from models import User
@@ -136,6 +136,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # 注册路由
+app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["真实报告"])
+app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["站内通知"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["认证"])
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["用户管理"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["仪表盘"])

@@ -1,0 +1,8 @@
+# Run from ATS root with Python 3.11+. Kept separate from SAT's legacy environment.
+-e ./backend[dev]
+websockets>=15,<18
+psutil>=5.8
+pyyaml>=6
+pytest>=8,<10
+pytest-asyncio>=0.23
+allure-pytest>=2.13

@@ -135,7 +135,7 @@ class WorkspaceManager:
         except Exception as e:
             raise Exception(f"读取文件失败: {str(e)}")
     
-    def write_file(self, path: str, content: str, encoding: str = "utf-8", is_base64: bool = False) -> Dict[str, Any]:
+    def write_file(self, path: str, content: str, encoding: str = "utf-8", is_base64: bool = False, overwrite: bool = True) -> Dict[str, Any]:
         """
         写入文件
         
@@ -157,10 +157,10 @@ class WorkspaceManager:
             if is_base64:
                 # 解码base64内容
                 content_bytes = base64.b64decode(content)
-                with open(file_path, 'wb') as f:
+                with open(file_path, 'wb' if overwrite else 'xb') as f:
                     f.write(content_bytes)
             else:
-                with open(file_path, 'w', encoding=encoding) as f:
+                with open(file_path, 'w' if overwrite else 'x', encoding=encoding) as f:
                     f.write(content)
             
             return {

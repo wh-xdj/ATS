@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import { useUserStore } from '@/stores/user'
+import { createRouter, createWebHistory } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 
 const routes = [
   {
@@ -92,6 +92,12 @@ const routes = [
         }
       },
       {
+        path: 'executions', name: 'Executions', component: () => import('@views/Executions.vue'), meta: { title: '执行记录', requiresAuth: true }
+      },
+      {
+        path: 'reports', name: 'Reports', component: () => import('@views/Reports.vue'), meta: { title: '测试报告', requiresAuth: true }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@views/Profile.vue'),
@@ -118,7 +124,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
   
   // 设置页面标题

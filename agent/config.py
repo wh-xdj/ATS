@@ -1,6 +1,7 @@
 """配置管理模块"""
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 import yaml
@@ -20,6 +21,11 @@ class Config:
         self.keep_tasks: int = 10
         self.keep_days: int = 7
         self.log_max_size: int = 10 * 1024 * 1024  # 10MB
+        base = Path(__file__).resolve().parents[2]
+        self.sat_root = str(base / "sat")
+        self.ecu_root = str(base / "ecu-simulator")
+        self.sat_python = sys.executable
+        self.sat_allow_hardware = False
         self.log_backup_count: int = 5
     
     @classmethod
@@ -73,6 +79,12 @@ class Config:
             if not data:
                 return
             
+            sat = data.get("integrations", {}).get("sat", {})
+            self.sat_root = sat.get("root", self.sat_root)
+            self.ecu_root = sat.get("ecu_root", self.ecu_root)
+            self.sat_python = sat.get("python", self.sat_python)
+            self.sat_allow_hardware = sat.get("allow_hardware", False) is True
+
             # 服务器配置
             if "server" in data:
                 server = data["server"]

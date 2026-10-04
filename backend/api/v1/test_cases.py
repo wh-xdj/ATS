@@ -256,3 +256,30 @@ async def delete_test_case(
         logger.exception(f"删除测试用例失败: case_id={case_id}")
         raise HTTPException(status_code=500, detail=f"删除测试用例失败: {str(e)}")
 
+
+
+@router.post('/{case_id}/execute')
+async def execute_case(case_id: str, body: dict, db: Session=Depends(get_db), current_user: User=Depends(get_current_user)):
+    from models import TestCase
+    from models.test_suite import TestSuite
+    from models.test_plan import TestPlan
+    from services.access import require_project
+    from services.environment_service import EnvironmentService
+    from services.test_suite_service import TestSuiteService
+    from api.v1.test_suites import execute_test_suite
+    case=db.get(TestCase,case_id)
+    template=db.get(TestSuite,body.get('suiteId',''))
+    if not case or not template: raise HTTPException(404,'用例或执行模板不存在')
+    require_project(db,current_user,case.project_id,'test_plan','execute')
+    plan=db.get(TestPlan,template.plan_id)
+    if plan.project_id!=case.project_id or case_id not in template.case_ids:
+        raise HTTPException(422,'所选模板必须属于同项目并包含该用例')
+    if not case.is_automated: raise HTTPException(422,'仅自动化用例可由Agent执行')
+    if not template.execution_command.strip().startswith('ats-sat'):
+        raise HTTPException(422,'单用例选择目前支持ats-sat模板，其他命令不能保证只运行所选用例')
+    environment=EnvironmentService.get_environment(db,template.environment_id)
+    if not environment or not environment.get('isOnline'): raise HTTPException(503,'模板执行环境未在线')
+    values={field:getattr(template,field) for field in ['git_enabled','git_repo_url','git_branch','git_token','environment_id','execution_command']}
+    values.update(name='单用例：'+case.name[:200],case_ids=[case_id],description='基于既有模板 '+template.id)
+    suite=TestSuiteService.create_test_suite(db,template.plan_id,values,str(current_user.id))
+    return await execute_test_suite(suite.id,db,current_user)

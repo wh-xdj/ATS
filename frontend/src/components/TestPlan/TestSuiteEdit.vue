@@ -129,6 +129,16 @@
         </div>
       </a-form-item>
 
+      <a-form-item label="SAT / ECU 集成">
+        <a-space>
+          <a-button @click="formData.executionCommand = 'ats-sat --mode offline'">使用离线软件验收</a-button>
+          <a-button @click="formData.executionCommand = 'ats-sat --mode sat --tests test_case --bench-config bench_config/your_bench.yaml --case-config config/your_case.yaml'">使用 SAT 台架模板</a-button>
+        </a-space>
+        <div style="color: #8c8c8c; margin-top: 6px; font-size: 12px">
+          离线用例编号：sat_import、ecu_positive、ecu_negative、ecu_lifecycle。台架需在 Agent 配置中启用并填写实际配置路径。
+        </div>
+      </a-form-item>
+
       <a-form-item label="执行命令" name="executionCommand">
         <a-textarea
           v-model:value="formData.executionCommand"
@@ -269,7 +279,7 @@ const originalPlanId = ref<string>('')
 const originalCaseIds = ref<string[]>([])
 
 const onlineEnvironments = computed(() => {
-  return environments.value.filter(env => env.isOnline || env.is_online)
+  return environments.value.filter(env => env.isOnline)
 })
 
 const currentProjectId = computed(() => {
@@ -346,7 +356,7 @@ const formRules: Record<string, Rule[]> = {
   ],
   gitRepoUrl: [
     { 
-      validator: (rule, value) => {
+      validator: (_rule, value) => {
         if (enableGitConfig.value && !value) {
           return Promise.reject('请输入Git仓库地址')
         }
@@ -357,7 +367,7 @@ const formRules: Record<string, Rule[]> = {
   ],
   gitBranch: [
     { 
-      validator: (rule, value) => {
+      validator: (_rule, value) => {
         if (enableGitConfig.value && !value) {
           return Promise.reject('请输入Git分支')
         }
@@ -377,7 +387,7 @@ const formRules: Record<string, Rule[]> = {
   ],
   caseIds: [
     { required: true, message: '请至少选择一个测试用例', trigger: 'change' },
-    { validator: (rule, value) => {
+    { validator: (_rule, value) => {
         if (!value || value.length === 0) {
           return Promise.reject('请至少选择一个测试用例')
         }
@@ -415,8 +425,8 @@ const loadEnvironments = async () => {
   try {
     const response = await environmentApi.getEnvironments()
     // 处理API响应格式
-    const data = response.data || response
-    let envList = Array.isArray(data) ? data : (data.items || data.data || [])
+    const data = response
+    const envList = Array.isArray(data) ? data : (data.items || [])
     
     // 确保字段名正确映射（后端可能返回snake_case，前端需要camelCase）
     environments.value = envList.map((env: any) => ({
@@ -525,7 +535,7 @@ const loadCasesInfo = async () => {
     
     const allCases = response.items || []
     // 只显示自动化用例
-    const automatedCases = allCases.filter(c => c.isAutomated || c.is_automated)
+    const automatedCases = allCases.filter(c => c.isAutomated)
     selectedCases.value = automatedCases.filter(c => formData.caseIds.includes(c.id))
   } catch (error) {
     console.error('Failed to load cases info:', error)
@@ -538,9 +548,9 @@ const loadCasesInfo = async () => {
   }
 }
 
-const handleCasesSelected = (caseIds: string[], cases: TestCase[]) => {
+const handleCasesSelected = (_caseIds: string[], cases: TestCase[]) => {
   // 确保只添加自动化用例
-  const automatedCases = cases.filter(c => c.isAutomated || c.is_automated)
+  const automatedCases = cases.filter(c => c.isAutomated)
   const automatedCaseIds = automatedCases.map(c => c.id)
   
   formData.caseIds = automatedCaseIds

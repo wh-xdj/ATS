@@ -464,14 +464,19 @@ async def get_environment_suite_executions(
             # 从TestSuiteExecution表获取执行记录（用于判断结果和执行人）
             time_window_start = exec_time - timedelta(minutes=5)
             time_window_end = exec_time + timedelta(minutes=5)
-            exec_records = db.query(TestSuiteExecution).filter(
-                TestSuiteExecution.suite_id == suite_id_val,
-                TestSuiteExecution.executed_at >= time_window_start,
-                TestSuiteExecution.executed_at <= time_window_end
-            ).all()
+            if suite.execution_command.strip().startswith("ats-sat"):
+                from services.suite_results import result_id
+                ids = [result_id(execution_id_val, cid) for cid in suite.case_ids]
+                exec_records = db.query(TestSuiteExecution).filter(TestSuiteExecution.id.in_(ids)).all()
+            else:
+                exec_records = db.query(TestSuiteExecution).filter(
+                    TestSuiteExecution.suite_id == suite_id_val,
+                    TestSuiteExecution.executed_at >= time_window_start,
+                    TestSuiteExecution.executed_at <= time_window_end
+                ).all()
             
             # 如果没有找到执行记录，尝试查找最近的
-            if not exec_records:
+            if not exec_records and not suite.execution_command.strip().startswith("ats-sat"):
                 exec_records = db.query(TestSuiteExecution).filter(
                     TestSuiteExecution.suite_id == suite_id_val
                 ).order_by(TestSuiteExecution.executed_at.desc()).limit(1).all()

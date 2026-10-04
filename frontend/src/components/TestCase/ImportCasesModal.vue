@@ -135,16 +135,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import {
-  UploadOutlined,
-  DownloadOutlined,
-  FileExcelOutlined
-} from '@ant-design/icons-vue'
-import { message, Modal } from 'ant-design-vue'
-import type { UploadChangeParam, UploadFile } from 'ant-design-vue/es/upload/interface'
-import { testCaseApi } from '@/api/testCase'
-import { apiClient } from '@/utils/api'
+import { ref, watch } from 'vue';
+import { UploadOutlined, DownloadOutlined, FileExcelOutlined } from '@ant-design/icons-vue';
+import { message, Modal } from 'ant-design-vue';
+import type { UploadChangeParam } from 'ant-design-vue/es/upload/interface';
+import { testCaseApi } from '@/api/testCase';
+import { apiClient } from '@/utils/api';
 
 interface Props {
   visible: boolean

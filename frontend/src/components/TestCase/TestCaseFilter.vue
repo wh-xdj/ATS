@@ -149,13 +149,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
-import {
-  CloseOutlined,
-  PlusOutlined,
-  MinusCircleOutlined
-} from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { ref, watch } from 'vue';
+import { CloseOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 
 interface FilterCondition {
   field: string

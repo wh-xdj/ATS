@@ -20,7 +20,7 @@ export const notificationApi = {
     return apiClient.get(url)
   },
 
-  markAsRead: async (notificationId: number): Promise<void> => {
+  markAsRead: async (notificationId: string): Promise<void> => {
     return apiClient.put(`/notifications/${notificationId}/read`)
   },
 
@@ -28,7 +28,7 @@ export const notificationApi = {
     return apiClient.put('/notifications/read-all')
   },
 
-  deleteNotification: async (notificationId: number): Promise<void> => {
+  deleteNotification: async (notificationId: string): Promise<void> => {
     return apiClient.delete(`/notifications/${notificationId}`)
   }
 }

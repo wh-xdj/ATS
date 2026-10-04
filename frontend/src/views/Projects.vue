@@ -48,7 +48,7 @@
           :loading="loading"
           :row-selection="rowSelection"
           :pagination="false"
-          :row-key="record => record.id"
+          row-key="id"
           :scroll="{ x: 1200, y: 'calc(100vh - 340px)' }"
           @change="handleTableChange"
           size="middle"
@@ -147,7 +147,7 @@
             :total="pagination.total"
             :show-size-changer="true"
             :show-quick-jumper="true"
-            :show-total="(total) => `共 ${total} 条`"
+            :show-total="paginationTotal"
             @change="handlePaginationChange"
             @show-size-change="handlePaginationChange"
           />
@@ -345,10 +345,6 @@ const loadProjects = async () => {
     if (response && typeof response === 'object' && 'items' in response) {
       projects.value = response.items || []
       pagination.total = response.total || 0
-    } else if (Array.isArray(response)) {
-      // 兼容旧格式（直接返回数组）
-      projects.value = response
-      pagination.total = response.length
     } else {
       projects.value = []
       pagination.total = 0
@@ -515,6 +511,7 @@ const formatDateTime = (dateStr: string) => {
 onMounted(() => {
   loadProjects()
 })
+const paginationTotal = (total: number) => `共 ${total} 条`
 </script>
 
 <style scoped>

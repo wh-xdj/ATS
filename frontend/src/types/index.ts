@@ -57,7 +57,7 @@ export interface TestCase {
   isAutomated?: boolean
   id: string
   projectId: string
-  moduleId?: string
+  moduleId?: string | null
   caseCode: string
   name: string
   type: 'functional' | 'interface' | 'ui' | 'performance' | 'security'
@@ -97,6 +97,21 @@ export interface CaseStatusCounts {
   skip: number
 }
 
+export interface PlanCase extends TestCase {
+  executionStatus?: keyof CaseStatusCounts
+  executionUpdatedAt?: string
+}
+
+export interface PlanEnvironmentConfig extends Record<string, unknown> {
+  notes?: string
+  executionStrategy?: 'sequential' | 'parallel' | 'priority'
+  retryOnFailure?: boolean
+  retryCount?: number
+  notificationMethods?: string[]
+  notificationRecipients?: string[]
+  notificationEvents?: string[]
+}
+
 export interface TestPlan {
   id: string
   projectId: string
@@ -108,13 +123,14 @@ export interface TestPlan {
   startDate?: string
   endDate?: string
   cronExpression?: string
-  environmentConfig: Record<string, any>
+  environmentConfig: PlanEnvironmentConfig
   status: 'not_started' | 'running' | 'completed' | 'paused' | 'overdue'
   environmentId?: string
   createdAt: string
   updatedAt: string
   totalCases?: number
   executedCases?: number
+  testCases?: PlanCase[]
   caseStatusCounts?: CaseStatusCounts
 }
 
@@ -124,7 +140,7 @@ export interface TestExecution {
   caseId: string
   executorId: string
   environmentId?: string
-  result: 'passed' | 'failed' | 'blocked' | 'skipped'
+  result: 'passed' | 'failed' | 'blocked' | 'skipped' | 'error'
   duration?: number
   notes?: string
   errorMessage?: string
@@ -202,7 +218,7 @@ export interface EnvironmentOld {
 }
 
 export interface Notification {
-  id: number
+  id: string
   userId: string
   type: string
   title: string

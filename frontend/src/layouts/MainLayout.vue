@@ -51,11 +51,11 @@
           <!-- 通知 -->
           <a-dropdown>
             <a-badge :count="unreadCount">
-              <a-button type="text" :icon="h(BellOutlined)" />
+              <a-button type="text" aria-label="站内通知" :icon="h(BellOutlined)" />
             </a-badge>
             <template #overlay>
               <a-menu>
-                <a-menu-item v-for="notification in notifications" :key="notification.id">
+                <a-menu-item v-for="notification in notifications" :key="notification.id" @click="readNotification(notification)">
                   <div class="notification-item">
                     <div class="notification-title">{{ notification.title }}</div>
                     <div class="notification-content">{{ notification.content }}</div>
@@ -64,7 +64,7 @@
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="all-notifications">
-                  <a @click="viewAllNotifications">查看全部通知</a>
+                  <a @click="viewAllNotifications">全部标为已读</a>
                 </a-menu-item>
               </a-menu>
             </template>
@@ -72,7 +72,7 @@
 
           <!-- 用户菜单 -->
           <a-dropdown>
-            <a-avatar :src="user?.avatar" :icon="h(UserOutlined)" />
+            <a-avatar  :icon="h(UserOutlined)" />
             <template #overlay>
               <a-menu>
                 <a-menu-item key="profile" @click="handleProfile">
@@ -107,27 +107,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
-import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  DashboardOutlined,
-  ProjectOutlined,
-  ExperimentOutlined,
-  ScheduleOutlined,
-  PlayCircleOutlined,
-  AppstoreOutlined,
-  SettingOutlined,
-  BellOutlined,
-  UserOutlined,
-  LogoutOutlined
-} from '@ant-design/icons-vue'
-import { useUserStore } from '@/stores/user'
-import { useProjectStore } from '@/stores/project'
+import { ref, computed, h, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { message } from 'ant-design-vue';
+import { MenuFoldOutlined, MenuUnfoldOutlined, DashboardOutlined, ProjectOutlined, ExperimentOutlined, ScheduleOutlined, AppstoreOutlined, SettingOutlined, BellOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons-vue';
+import { useUserStore } from '@/stores/user';
+import { useProjectStore } from '@/stores/project';
 import dayjs from 'dayjs'
-import type { Project, Notification } from '@/types'
+import { notificationApi } from '@/api/notification'
+import type { Notification } from '@/types';
 
 const router = useRouter()
 const route = useRoute()
@@ -139,18 +127,15 @@ const selectedKeys = ref<string[]>([])
 const openKeys = ref<string[]>([])
 const currentProjectId = ref<string>()
 
-// 模拟通知数据
-const notifications = ref<Notification[]>([
-  {
-    id: 1,
-    userId: '1',
-    type: 'plan_reminder',
-    title: '测试计划提醒',
-    content: '您有一个测试计划即将到期',
-    isRead: false,
-    createdAt: new Date().toISOString()
-  }
-])
+const notifications = ref<Notification[]>([])
+const refreshNotifications = async () => {
+  try { notifications.value = (await notificationApi.getNotifications({ size: 1000 })).items }
+  catch { notifications.value = [] }
+}
+const readNotification = async (item: Notification) => { await notificationApi.markAsRead(item.id); await refreshNotifications() }
+let inboxTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => { refreshNotifications(); inboxTimer = setInterval(refreshNotifications, 5000) })
+onUnmounted(() => { if (inboxTimer) clearInterval(inboxTimer) })
 
 const unreadCount = computed(() =>
   notifications.value.filter(n => !n.isRead).length
@@ -188,6 +173,12 @@ const menuItems = [
     path: '/test-suites'
   },
   {
+    key: 'executions', title: '执行记录', icon: ScheduleOutlined, path: '/executions'
+  },
+  {
+    key: 'reports', title: '测试报告', icon: ScheduleOutlined, path: '/reports'
+  },
+  {
     key: 'environments',
     title: '环境管理',
     icon: SettingOutlined,
@@ -195,30 +186,10 @@ const menuItems = [
   }
 ]
 
-const user = computed(() => userStore.user)
+
 const projects = computed(() => projectStore.projects)
 
-const breadcrumbs = computed(() => {
-  const routeBreadcrumbs = route.matched
-    .filter(item => item.meta?.title)
-    .map(item => ({
-      title: item.meta?.title as string,
-      path: item.path
-    }))
 
-  // 添加项目上下文面包屑
-  if (route.path.includes('/projects/') && currentProjectId.value) {
-    const currentProject = projects.value.find(p => p.id === currentProjectId.value)
-    if (currentProject && !routeBreadcrumbs[0]?.title.includes(currentProject.name)) {
-      routeBreadcrumbs.unshift({
-        title: currentProject.name,
-        path: `/projects/${currentProjectId.value}`
-      })
-    }
-  }
-
-  return routeBreadcrumbs
-})
 
 const toggleCollapsed = () => {
   collapsed.value = !collapsed.value
@@ -232,17 +203,7 @@ const handleMenuClick = (item: any) => {
   router.push(item.path)
 }
 
-const handleProjectChange = (projectId: string) => {
-  projectStore.setCurrentProject(
-    projects.value.find(p => p.id === projectId) || null
-  )
 
-  // 更新路由到项目上下文
-  if (route.path.includes('/projects/')) {
-    const newPath = route.path.replace(/\/projects\/[^/]+/, `/projects/${projectId}`)
-    router.push(newPath)
-  }
-}
 
 const handleProfile = () => {
   router.push('/profile')
@@ -263,11 +224,11 @@ const handleLogout = async () => {
 }
 
 const formatTime = (time: string) => {
-  return dayjs(time).fromNow()
+  return dayjs(time).format('YYYY-MM-DD HH:mm')
 }
 
 const viewAllNotifications = () => {
-  message.info('通知功能开发中...')
+  notificationApi.markAllAsRead().then(refreshNotifications)
 }
 
 // 初始化

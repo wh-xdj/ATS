@@ -227,18 +227,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import {
-  DownloadOutlined,
-  ShareAltOutlined,
-  EyeOutlined,
-  CopyOutlined,
-  ClockCircleOutlined
-} from '@ant-design/icons-vue'
+import { ref, onMounted } from 'vue';
+import { message } from 'ant-design-vue';
+import { DownloadOutlined, ShareAltOutlined, EyeOutlined, CopyOutlined, ClockCircleOutlined } from '@ant-design/icons-vue';
 import dayjs from 'dayjs'
-import dashboardApi from '@/api/dashboard'
-import type { Report } from '@/types'
+
+import type { Report } from '@/types';
 
 interface Props {
   report: Report
@@ -284,22 +278,7 @@ const downloadColumns = [
 // 方法
 const loadDownloadHistory = async () => {
   try {
-    // 这里应该调用获取下载历史的API
-    // 暂时使用模拟数据
-    downloadHistory.value = [
-      {
-        id: '1',
-        downloadedAt: dayjs().subtract(2, 'hour').toISOString(),
-        userName: '张三',
-        downloadType: 'direct'
-      },
-      {
-        id: '2',
-        downloadedAt: dayjs().subtract(1, 'day').toISOString(),
-        userName: '李四',
-        downloadType: 'share'
-      }
-    ]
+    downloadHistory.value = []
   } catch (error) {
     console.error('Failed to load download history:', error)
   }
@@ -341,7 +320,7 @@ const viewErrorLogs = () => {
   message.info('查看日志功能开发中...')
 }
 
-const redownloadReport = (record: any) => {
+const redownloadReport = (_record: any) => {
   // 重新下载逻辑
   downloadReport()
 }

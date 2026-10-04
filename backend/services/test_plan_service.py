@@ -172,6 +172,7 @@ class TestPlanService:
             start_date=start_date.date() if start_date else None,
             end_date=end_date.date() if end_date else None,
             environment_config=plan_data.get("environmentConfig"),
+            environment_id=plan_data.get("environmentId"),
             status="not_started"
         )
 
@@ -257,6 +258,8 @@ class TestPlanService:
         
         if "status" in plan_data:
             test_plan.status = plan_data["status"]
+        if "environmentId" in plan_data:
+            test_plan.environment_id = plan_data["environmentId"]
         if "environmentConfig" in plan_data:
             test_plan.environment_config = plan_data["environmentConfig"]
 

@@ -51,7 +51,7 @@ export const projectApi = {
 
   createModule: async (projectId: string, data: {
     name: string
-    parentId?: string
+    parentId?: string | null
     sortOrder: number
     description?: string
   }) => {
@@ -60,7 +60,7 @@ export const projectApi = {
 
   updateModule: async (projectId: string, moduleId: string, data: {
     name: string
-    parentId?: string
+    parentId?: string | null
     sortOrder: number
     description?: string
   }) => {

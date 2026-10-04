@@ -83,7 +83,7 @@
           :data-source="reports"
           :loading="loading"
           :pagination="pagination"
-          :row-key="record => record.id"
+          row-key="id"
           @change="handleTableChange"
         >
           <template #bodyCell="{ column, record }">
@@ -158,7 +158,7 @@
                     <template #icon><DownOutlined /></template>
                   </a-button>
                   <template #overlay>
-                    <a-menu @click="(info) => handleActionClick(info.key, record)">
+                    <a-menu @click="handleActionMenuEvent($event, record)">
                       <a-menu-item key="share">分享</a-menu-item>
                       <a-menu-item key="duplicate">复制</a-menu-item>
                       <a-menu-item key="regenerate" v-if="record.status === 'failed'">
@@ -226,24 +226,24 @@
           <a-range-picker
             v-model:value="reportForm.dateRange"
             style="width: 100%"
-            placeholder="请选择时间范围"
+            :placeholder="['开始日期', '结束日期']"
           />
         </a-form-item>
 
         <a-form-item label="包含内容">
           <a-checkbox-group v-model:value="reportForm.includeContent">
             <a-checkbox value="overview">概览统计</a-checkbox>
-            <a-checkbox value="charts">图表分析</a-checkbox>
+            <a-checkbox value="charts" disabled>图表分析（未支持）</a-checkbox>
             <a-checkbox value="details">详细数据</a-checkbox>
             <a-checkbox value="trends">趋势分析</a-checkbox>
-            <a-checkbox value="recommendations">改进建议</a-checkbox>
+            <a-checkbox value="recommendations" disabled>改进建议（未支持）</a-checkbox>
           </a-checkbox-group>
         </a-form-item>
 
         <a-form-item label="报告格式">
           <a-radio-group v-model:value="reportForm.format">
-            <a-radio value="pdf">PDF</a-radio>
-            <a-radio value="excel">Excel</a-radio>
+            <a-radio value="pdf" disabled>PDF（未支持）</a-radio>
+            <a-radio value="excel" disabled>Excel（未支持）</a-radio>
             <a-radio value="html">HTML</a-radio>
           </a-radio-group>
         </a-form-item>
@@ -251,7 +251,7 @@
         <a-form-item label="备注">
           <a-textarea
             v-model:value="reportForm.notes"
-            placeholder="请输入备注信息（可选）"
+            placeholder="报告备注保存尚未支持" disabled
             :rows="3"
             :maxlength="500"
             show-count
@@ -315,8 +315,8 @@
         <template v-if="shareForm.method === 'export'">
           <a-form-item label="导出格式">
             <a-radio-group v-model:value="shareForm.exportFormat">
-              <a-radio value="pdf">PDF</a-radio>
-              <a-radio value="excel">Excel</a-radio>
+              <a-radio value="pdf" disabled>PDF（未支持）</a-radio>
+              <a-radio value="excel" disabled>Excel（未支持）</a-radio>
               <a-radio value="html">HTML</a-radio>
             </a-radio-group>
           </a-form-item>
@@ -327,31 +327,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router'
-import { message, Modal } from 'ant-design-vue'
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  DownloadOutlined,
-  DownOutlined,
-  FilePdfOutlined,
-  FileExcelOutlined,
-  FileTextOutlined,
-  PieChartOutlined,
-  BarChartOutlined,
-  LineChartOutlined
-} from '@ant-design/icons-vue'
+import { useProjectStore } from '@/stores/project';
+import { message, Modal } from 'ant-design-vue';
+import { PlusOutlined, ReloadOutlined, DownloadOutlined, DownOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, PieChartOutlined, BarChartOutlined, LineChartOutlined } from '@ant-design/icons-vue';
 import dayjs from 'dayjs'
 import dashboardApi from '@/api/dashboard'
-import type { Dayjs } from 'dayjs'
-import type { Report } from '@/types'
+import type { Dayjs } from 'dayjs';
+import type { Report } from '@/types';
 import ReportDetail from '@/components/Report/ReportDetail.vue'
 
 const route = useRoute()
+const projectStore = useProjectStore()
 
 // 计算属性
-const projectId = computed(() => route.params.projectId as string)
+const projectId = computed(() => (route.params.projectId as string | undefined) || projectStore.currentProject?.id)
 const currentProject = computed(() => {
   // 这里应该从store中获取当前项目信息
   return { id: projectId.value, name: '当前项目' }
@@ -380,8 +371,8 @@ const reportForm = reactive({
   name: '',
   type: 'summary' as 'summary' | 'detailed' | 'trend' | 'coverage',
   dateRange: null as [Dayjs, Dayjs] | null,
-  includeContent: ['overview', 'charts'] as string[],
-  format: 'pdf' as 'pdf' | 'excel' | 'html',
+  includeContent: ['overview', 'details', 'trends'] as string[],
+  format: 'html' as 'pdf' | 'excel' | 'html',
   notes: ''
 })
 
@@ -474,45 +465,13 @@ const loadReports = async () => {
       projectId: projectId.value
     })
     
-    reports.value = response.data.content || response.data
-    pagination.value.total = response.data.totalElements || response.data.length || 0
+    reports.value = response.items || []
+    pagination.value.total = response.total || 0
   } catch (error) {
     console.error('Failed to load reports:', error)
     message.error('加载报告列表失败')
-    // 使用模拟数据
-    reports.value = [
-      {
-        id: '1',
-        name: '2024年12月测试综合报告',
-        reportNumber: 'RPT-2024-12-001',
-        type: 'summary',
-        status: 'completed',
-        format: 'pdf',
-        fileSize: 2048576,
-        createdAt: dayjs().subtract(1, 'day').toISOString(),
-        creatorId: 'user1',
-        creatorName: '张三',
-        downloadUrl: '/reports/report1.pdf',
-        projectId: projectId.value,
-        notes: '本月测试总结报告'
-      },
-      {
-        id: '2',
-        name: '自动化测试趋势分析',
-        reportNumber: 'RPT-2024-12-002',
-        type: 'trend',
-        status: 'generating',
-        format: 'excel',
-        fileSize: 0,
-        createdAt: dayjs().subtract(2, 'hour').toISOString(),
-        creatorId: 'user1',
-        creatorName: '张三',
-        downloadUrl: '',
-        projectId: projectId.value,
-        notes: ''
-      }
-    ]
-    pagination.value.total = 2
+    reports.value = []
+    pagination.value.total = 0
   } finally {
     loading.value = false
   }
@@ -568,7 +527,7 @@ const exportReports = () => {
 const viewReportDetail = async (reportId: string) => {
   try {
     const response = await dashboardApi.getReport(reportId)
-    selectedReport.value = response.data
+    selectedReport.value = response
     detailDrawerVisible.value = true
   } catch (error) {
     console.error('Failed to load report detail:', error)
@@ -597,7 +556,7 @@ const downloadReport = async (report: Report) => {
     } else {
       // 通过API下载
       const response = await dashboardApi.downloadReport(report.id)
-      const blob = new Blob([response.data])
+      const blob = response
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -642,7 +601,7 @@ const duplicateReport = (report: Report) => {
     name: `${report.name} (副本)`,
     type: report.type,
     dateRange: null,
-    includeContent: ['overview', 'charts'],
+    includeContent: ['overview', 'details', 'trends'],
     format: report.format,
     notes: report.notes || ''
   })
@@ -685,8 +644,8 @@ const generateReport = () => {
     name: '',
     type: 'summary',
     dateRange: null,
-    includeContent: ['overview', 'charts'],
-    format: 'pdf',
+    includeContent: ['overview', 'details', 'trends'],
+    format: 'html',
     notes: ''
   })
   generateModalVisible.value = true
@@ -705,7 +664,8 @@ const confirmGenerateReport = async () => {
 
   generating.value = true
   try {
-    const response = await dashboardApi.generateReport({
+    await dashboardApi.generateReport({
+      name: reportForm.name,
       type: reportForm.type,
       startDate: reportForm.dateRange[0].format('YYYY-MM-DD'),
       endDate: reportForm.dateRange[1].format('YYYY-MM-DD'),
@@ -738,10 +698,10 @@ const confirmShareReport = async () => {
   try {
     switch (shareForm.method) {
       case 'link':
-        message.success('分享链接已生成')
+        message.info('分享尚未支持，未生成链接')
         break
       case 'email':
-        message.success('邮件发送成功')
+        message.info('邮件发送尚未支持，未外发')
         break
       case 'export':
         // 下载报告副本
@@ -821,6 +781,7 @@ const formatDateTime = (dateStr: string) => {
 onMounted(() => {
   loadReports()
 })
+const handleActionMenuEvent = (info: { key: string | number }, record: Report) => handleActionClick(String(info.key), record)
 </script>
 
 <style scoped>

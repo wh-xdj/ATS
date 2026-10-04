@@ -93,7 +93,7 @@
                 :loading="loading"
                 :pagination="pagination"
                 :row-selection="rowSelection"
-                :row-key="record => record.id"
+                row-key="id"
                 :scroll="{ y: 350 }"
                 @change="handleTableChange"
                 size="small"
@@ -129,12 +129,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { FolderOutlined, CheckCircleFilled } from '@ant-design/icons-vue'
-import { testCaseApi } from '@/api/testCase'
-import { projectApi } from '@/api/project'
-import type { TestCase } from '@/types'
+import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { message } from 'ant-design-vue';
+import { FolderOutlined, CheckCircleFilled } from '@ant-design/icons-vue';
+import { testCaseApi } from '@/api/testCase';
+import { projectApi } from '@/api/project';
+import type { TestCase } from '@/types';
 
 interface Props {
   visible: boolean
@@ -289,7 +289,7 @@ const filteredCases = computed(() => {
 
   // 如果设置了只显示自动化用例，先过滤
   if (props.filterAutomated) {
-    filtered = filtered.filter(caseItem => caseItem.isAutomated || caseItem.is_automated)
+    filtered = filtered.filter(caseItem => caseItem.isAutomated)
   }
 
   // 模块筛选
@@ -339,11 +339,7 @@ const getModuleName = (moduleId: string | undefined): string => {
 }
 
 // 当前选择的用例（仅新选择的，不包括已存在的）
-const newSelectedCases = computed(() => 
-  allCases.value.filter(caseItem => 
-    selectedCaseIds.value.includes(caseItem.id) && !existingCaseIds.value.includes(caseItem.id)
-  )
-)
+
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedCaseIds.value,

@@ -122,6 +122,7 @@ class EnvironmentService:
             tags=environment_data.tags,
             remote_work_dir=environment_data.remote_work_dir,
             token=token,  # 生成Token
+            reconnect_delay=environment_data.reconnect_delay or "30",
             max_concurrent_tasks=environment_data.max_concurrent_tasks or 1,  # 默认1
             api_url=environment_data.api_url,
             web_url=environment_data.web_url,

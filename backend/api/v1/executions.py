@@ -1,154 +1,61 @@
-"""测试执行相关 API（独立 URL 前缀）"""
-from typing import Optional
-
-from fastapi import APIRouter, Depends
+"""Execution history reads actual persisted results; unknown IDs never pass."""
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
 from database import get_db
-from schemas.common import APIResponse, ResponseStatus
 from api.deps import get_current_user
-from models import User
-
+from models import User, TestCase, TestExecution
+from models.test_suite import TestSuiteExecution
+from services.access import require_project
+from services.execution_records import records
+from schemas.common import APIResponse
 
 router = APIRouter()
 
 
-@router.get("", response_model=APIResponse)
-async def get_executions(
-    project_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    page: int = 1,
-    size: int = 20,
-    search: Optional[str] = None,
-    case_id: Optional[str] = None,
-    plan_id: Optional[str] = None,
-    executor_id: Optional[str] = None,
-    environment_id: Optional[str] = None,
-    result: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-):
-    """获取测试执行列表（按项目过滤）"""
-    # TODO: 使用 SQLAlchemy 从数据库查询真实数据
-    items = [
-        {
-            "id": "exec_1",
-            "planId": "plan_1",
-            "caseId": "case_1",
-            "executorId": str(current_user.id) if current_user else "user_1",
-            "environmentId": "env_1",
-            "result": "passed",
-            "duration": 120.5,
-            "notes": "执行成功",
-            "executedAt": "2024-01-01T10:00:00",
-            "createdAt": "2024-01-01T10:00:00",
-        }
-    ]
-
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="获取成功",
-        data={
-            "items": items,
-            "total": len(items),
-            "page": page,
-            "size": size,
-            "pages": 1,
-            "hasNext": False,
-            "hasPrev": False,
-        },
-    )
+def reply(data):
+    return APIResponse(status='success', message='获取成功', data=data)
 
 
-@router.get("/{execution_id}", response_model=APIResponse)
-async def get_execution(
-    execution_id: str,
-    project_id: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """获取测试执行详情"""
-    # TODO: 使用 SQLAlchemy 从数据库查询真实数据
-    execution = {
-        "id": execution_id,
-        "planId": "plan_1",
-        "caseId": "case_1",
-        "executorId": str(current_user.id) if current_user else "user_1",
-        "environmentId": "env_1",
-        "result": "passed",
-        "duration": 120.5,
-        "notes": "执行成功",
-        "errorMessage": None,
-        "executionLog": "执行日志...",
-        "executedAt": "2024-01-01T10:00:00",
-        "createdAt": "2024-01-01T10:00:00",
-    }
-
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="获取成功",
-        data=execution,
-    )
+@router.get('')
+async def get_executions(project_id: str, page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=1000),
+    search: str = '', case_id: str | None = Query(None, alias='caseId'), plan_id: str | None = Query(None, alias='planId'),
+    environment_id: str | None = Query(None, alias='environmentId'), executor_id: str | None = Query(None, alias='executorId'), result: str | None = None,
+    start_date: str | None = Query(None, alias='startDate'), end_date: str | None = Query(None, alias='endDate'),
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_project(db, current_user, project_id)
+    rows = records(db, project_id)
+    rows = [r for r in rows if (not search or search.lower() in (r['caseName'] + r['caseCode']).lower())
+        and (not case_id or r['caseId'] == case_id) and (not plan_id or r['planId'] == plan_id)
+        and (not executor_id or r['executorId'] == executor_id) and (not environment_id or r['environmentId'] == environment_id) and (not result or r['result'] == result)
+        and (not start_date or r['executedAt'][:10] >= start_date[:10])
+        and (not end_date or r['executedAt'][:10] <= end_date[:10])]
+    total = len(rows)
+    return reply(dict(items=rows[(page-1)*size:page*size], total=total, page=page, size=size,
+        pages=(total+size-1)//size, hasNext=page*size<total, hasPrev=page>1))
 
 
-@router.put("/{execution_id}", response_model=APIResponse)
-async def update_execution(
-    execution_id: str,
-    execution_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """更新测试执行"""
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="更新成功",
-        data={
-            "id": execution_id,
-            "result": execution_data.get("result") or "passed",
-            "notes": execution_data.get("notes"),
-        },
-    )
+def find_record(db, user, identifier):
+    row = db.get(TestExecution, identifier) or db.get(TestSuiteExecution, identifier)
+    if not row:
+        raise HTTPException(404, '执行记录不存在')
+    case = db.get(TestCase, row.case_id)
+    require_project(db, user, case.project_id)
+    return next(r for r in records(db, case.project_id) if r['id'] == identifier)
 
 
-@router.get("/{execution_id}/logs", response_model=APIResponse)
-async def get_execution_logs(
-    execution_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """获取执行日志"""
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="获取成功",
-        data="执行日志内容...",
-    )
+@router.get('/{execution_id}')
+async def get_execution(execution_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return reply(find_record(db, current_user, execution_id))
 
 
-@router.post("/{execution_id}/attachments", response_model=APIResponse)
-async def upload_execution_attachment(
-    execution_id: str,
-    file: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """上传执行附件"""
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="上传成功",
-    )
+@router.get('/{execution_id}/logs')
+async def get_execution_logs(execution_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return reply(find_record(db, current_user, execution_id).get('executionLog') or '')
 
 
-@router.get("/{execution_id}/attachments", response_model=APIResponse)
-async def get_execution_attachments(
-    execution_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """获取执行附件列表"""
-    return APIResponse(
-        status=ResponseStatus.SUCCESS,
-        message="获取成功",
-        data=[],
-    )
-
+@router.put('/{execution_id}')
+@router.post('/{execution_id}/attachments')
+@router.get('/{execution_id}/attachments')
+async def unsupported(execution_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    find_record(db, current_user, execution_id)
+    raise HTTPException(501, '执行结果不可手动改为通过；执行附件尚未支持，可使用工作空间上传')

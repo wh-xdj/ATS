@@ -81,7 +81,7 @@
             :data-source="executions"
             :loading="loading"
             :pagination="false"
-            :row-key="record => record.id"
+            row-key="id"
             @change="handleTableChange"
           >
             <template #bodyCell="{ column, record }">
@@ -133,7 +133,7 @@
             :total="pagination.total"
             :show-size-changer="true"
             :show-quick-jumper="true"
-            :show-total="(total) => `共 ${total} 条`"
+            :show-total="paginationTotal"
             @change="handlePaginationChange"
             @show-size-change="handlePaginationChange"
           />
@@ -240,21 +240,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
-import type { Dayjs } from 'dayjs'
-import {
-  ReloadOutlined,
-  DownloadOutlined,
-  FileOutlined
-} from '@ant-design/icons-vue'
-import { executionApi } from '@/api/execution'
-import { useProjectStore } from '@/stores/project'
-import type { TestExecution, Project } from '@/types'
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+
+import { message } from 'ant-design-vue';
+import type { Dayjs } from 'dayjs';
+import { ReloadOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue';
+import { executionApi } from '@/api/execution';
+import { useProjectStore } from '@/stores/project';
+import type { TestExecution, Project } from '@/types';
 import dayjs from 'dayjs'
 
-const route = useRoute()
+
 const projectStore = useProjectStore()
 
 // 项目选择
@@ -276,11 +272,9 @@ const projectId = computed<string | undefined>(() => {
   return projects.value[0]?.id
 })
 
-const currentProject = computed(() => projectStore.currentProject)
 
-const handleProjectChange = () => {
-  loadExecutions()
-}
+
+
 
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -421,14 +415,8 @@ const viewExecutionDetail = async (executionId: string) => {
     const detail = await executionApi.getExecution(executionId)
     executionDetail.value = detail
 
-    // 获取附件
-    try {
-      const attachments = await executionApi.getExecutionAttachments(executionId)
-      executionDetail.value.attachments = attachments
-    } catch (error) {
-      console.error('Failed to load attachments:', error)
-      executionDetail.value.attachments = []
-    }
+    // Attachments are not implemented; the actual log remains available.
+    executionDetail.value.attachments = []
   } catch (error) {
     console.error('Failed to load execution detail:', error)
     message.error('加载执行详情失败')
@@ -452,7 +440,7 @@ const viewLogs = async (executionId: string) => {
   }
 }
 
-const reExecute = async (executionId: string) => {
+const reExecute = async (_executionId: string) => {
   try {
     message.info('重试执行功能开发中...')
     // TODO: 实现重试执行逻辑
@@ -547,6 +535,7 @@ watch(
     }
   }
 )
+const paginationTotal = (total: number) => `共 ${total} 条`
 </script>
 
 <style scoped>

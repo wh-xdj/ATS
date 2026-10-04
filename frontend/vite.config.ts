@@ -20,12 +20,12 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.ATS_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         // 不重写路径，因为前端已经使用了 /api/v1 作为 baseURL
       },
       '/ws': {
-        target: 'ws://127.0.0.1:8000',
+        target: (process.env.ATS_BACKEND_URL || 'http://127.0.0.1:8000').replace(/^http/, 'ws'),
         ws: true,
         changeOrigin: true
       }

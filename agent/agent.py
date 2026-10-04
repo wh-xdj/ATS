@@ -20,6 +20,7 @@ if __name__ == "__main__":
     from websocket_client import WebSocketClient
     from task_executor import TaskExecutor
     from workspace_manager import WorkspaceManager
+    from sat_runner import SATRunner
 else:
     # 作为模块运行时，使用相对导入
     from .config import Config, parse_args
@@ -29,6 +30,7 @@ else:
     from .websocket_client import WebSocketClient
     from .task_executor import TaskExecutor
     from .workspace_manager import WorkspaceManager
+    from .sat_runner import SATRunner
 
 
 class Agent:
@@ -52,6 +54,7 @@ class Agent:
         self.monitor_task: Optional[asyncio.Task] = None
         self.running = False
         self.running_suites: Dict[str, subprocess.Popen] = {}  # suite_id -> process
+        self.sat_runner = SATRunner(self)
         self.suite_execution_ids: Dict[str, str] = {}  # suite_id -> execution_id
 
     def setup(self) -> None:
@@ -85,6 +88,7 @@ class Agent:
         """WebSocket连接成功回调"""
         if self.logger:
             self.logger.info("已连接到云端平台")
+        await self.sat_runner.flush()
 
     async def on_disconnect(self) -> None:
         """WebSocket断开连接回调"""
@@ -124,6 +128,8 @@ class Agent:
             await self._handle_workspace_mkdir(message)
         elif msg_type == "execute_test_suite":
             await self._handle_execute_test_suite(message)
+        elif msg_type == "sat_event_ack":
+            self.sat_runner.acknowledge(message.get("event_id", ""))
         elif msg_type == "cancel_test_suite":
             await self._handle_cancel_test_suite(message)
         else:
@@ -210,6 +216,7 @@ class Agent:
 
             # 初始化工作空间管理器
             self.workspace_manager = WorkspaceManager(self.work_dir)
+            await self.sat_runner.flush()
         except Exception as e:
             if self.logger:
                 self.logger.error(f"创建工作目录失败: {e}")
@@ -410,7 +417,7 @@ class Agent:
         is_base64 = message.get("is_base64", False)
 
         try:
-            result = self.workspace_manager.write_file(path, content, encoding, is_base64)
+            result = self.workspace_manager.write_file(path, content, encoding, is_base64, message.get("overwrite", True))
             await self.ws_client.send_message({
                 "type": "workspace_write_response",
                 "request_id": request_id,
@@ -508,6 +515,12 @@ class Agent:
                 self.logger.error(f"测试套执行请求缺少必要参数: suite_id={suite_id}, execution_command={execution_command}, case_ids={case_ids}")
             return
 
+        if execution_command.strip().startswith("ats-sat"):
+            if not execution_id:
+                return
+            self.sat_runner.start(message)
+            return
+
         # 检查是否已经在执行
         if suite_id in self.running_suites:
             if self.logger:
@@ -541,6 +554,10 @@ class Agent:
 
         if self.logger:
             self.logger.info(f"收到测试套取消指令: {suite_id}")
+
+        if self.sat_runner.has_suite(suite_id):
+            await self.sat_runner.cancel(suite_id, message.get("execution_id"))
+            return
 
         if suite_id not in self.running_suites:
             if self.logger:
@@ -816,6 +833,10 @@ class Agent:
             # 生成用例筛选JSON文件
             import json
             test_cases_file = xat_root_dir / "xat" / "test_cases.json"
+            test_cases_file.parent.mkdir(parents=True, exist_ok=True)
+            stale_results = test_cases_file.parent / "test_results.json"
+            if stale_results.exists():
+                stale_results.unlink()
 
             if case_codes:
                 test_cases_data = {
@@ -1192,7 +1213,7 @@ class Agent:
                     "type": "test_suite_completed",
                     "suite_id": suite_id,
                     "execution_id": execution_id,
-                    "status": "completed",  # 默认completed，后端会根据实际结果更新
+                    "status": "completed" if process.returncode == 0 and len(reported_results) == len(case_ids) else "failed",
                     "reported_case_count": len(reported_results),
                     "total_case_count": len(case_ids),
                     "duration": duration
@@ -1377,6 +1398,9 @@ class Agent:
                 await self.monitor_task
             except asyncio.CancelledError:
                 pass
+
+        for suite_id in set(self.sat_runner.suites.values()):
+            await self.sat_runner.cancel(suite_id)
 
         # 关闭WebSocket连接
         if self.ws_client:

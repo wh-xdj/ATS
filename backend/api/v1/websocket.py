@@ -194,7 +194,7 @@ async def websocket_endpoint(
         
         try:
             # 获取重连延迟配置（默认30秒）
-            reconnect_delay = environment.get("reconnect_delay") or "30"
+            reconnect_delay = environment.get("reconnect_delay") or environment.get("reconnectDelay") or "30"
             try:
                 reconnect_delay_int = int(reconnect_delay)
             except (ValueError, TypeError):
@@ -232,6 +232,27 @@ async def websocket_endpoint(
                 logger.error(f"[WebSocket] 发送认证成功消息失败: {e}", exc_info=True)
                 raise
             
+            # Resume a queued dispatch which could not be delivered during disconnect.
+            from services.task_queue_service import TaskQueueService
+            from services.suite_dispatch import build_suite_message
+            from models.test_suite import TestSuite
+            while TaskQueueService.can_execute_immediately(db, environment_id):
+                pending = TaskQueueService.get_next_pending_task(db, environment_id)
+                if not pending:
+                    break
+                suite = db.query(TestSuite).filter(TestSuite.id == pending.suite_id).first()
+                if not suite:
+                    break
+                TaskQueueService.start_task(db, pending.execution_id)
+                suite.status = "running"
+                sent = await manager.send_message(environment_id, build_suite_message(db, suite, pending.execution_id, pending.executor_id))
+                if not sent:
+                    pending.status = "pending"
+                    suite.status = "pending"
+                    db.commit()
+                    break
+                db.commit()
+
             # 保持连接，接收消息
             logger.info(f"[WebSocket] 进入消息接收循环，环境ID: {environment_id}")
             while True:
@@ -271,7 +292,9 @@ async def websocket_endpoint(
                     # 处理测试套执行结果
                     elif message.get("type") == "test_suite_result":
                         logger.info(f"[WebSocket] 收到测试套执行结果消息: suite_id={message.get('suite_id')}, case_id={message.get('case_id')}, result={message.get('result')}")
-                        await handle_test_suite_result(db, environment_id, message)
+                        accepted = await handle_test_suite_result(db, environment_id, message)
+                        if accepted and message.get("event_id"):
+                            await websocket.send_json({"type": "sat_event_ack", "event_id": message["event_id"]})
                     
                     # 处理测试套实时日志
                     elif message.get("type") == "test_suite_log":
@@ -279,7 +302,9 @@ async def websocket_endpoint(
                     
                     # 处理测试套执行完成消息
                     elif message.get("type") == "test_suite_completed":
-                        await handle_test_suite_completed(db, environment_id, message)
+                        accepted = await handle_test_suite_completed(db, environment_id, message)
+                        if accepted and message.get("event_id"):
+                            await websocket.send_json({"type": "sat_event_ack", "event_id": message["event_id"]})
                     
                     # 处理工作空间响应（从Agent返回）
                     elif message.get("type") in [
@@ -354,6 +379,15 @@ async def handle_test_suite_result(db: Session, environment_id: str, message: di
     from services.test_suite_service import TestSuiteService
     from models.test_suite import TestSuite
     
+    if message.get("execution_id"):
+        from services.suite_results import handle_run_result
+        try:
+            return handle_run_result(db, environment_id, message)
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to persist SAT result")
+            return False
+
     logger.info(f"[WebSocket] 开始处理测试套执行结果: {message}")
     try:
         suite_id = message.get("suite_id")
@@ -496,18 +530,8 @@ async def handle_test_suite_result(db: Session, environment_id: str, message: di
                                 # 构建执行任务消息
                                 git_enabled = next_suite.git_enabled == 'true' if hasattr(next_suite, 'git_enabled') and next_suite.git_enabled else False
                                 
-                                task_message = {
-                                    "type": "execute_test_suite",
-                                    "suite_id": next_suite.id,
-                                    "plan_id": next_suite.plan_id,
-                                    "execution_id": next_task.execution_id,
-                                    "git_repo_url": (next_suite.git_repo_url or None) if git_enabled else None,
-                                    "git_branch": (next_suite.git_branch or None) if git_enabled else None,
-                                    "git_token": (next_suite.git_token or None) if git_enabled else None,
-                                    "execution_command": next_suite.execution_command,
-                                    "case_ids": next_suite.case_ids,
-                                    "executor_id": next_task.executor_id
-                                }
+                                from services.suite_dispatch import build_suite_message
+                                task_message = build_suite_message(db, next_suite, next_task.execution_id, next_task.executor_id)
                                 
                                 # 发送到Agent
                                 from api.v1.websocket import manager
@@ -686,6 +710,21 @@ async def handle_test_suite_completed(db: Session, environment_id: str, message:
             logger.warning(f"[WebSocket] 测试套完成消息缺少必要字段: {message}")
             return
         
+        task = db.query(TaskQueue).filter(TaskQueue.execution_id == execution_id).first()
+        if not task or task.suite_id != suite_id or task.environment_id != environment_id:
+            return False
+        if task.status in ["completed", "failed", "cancelled"]:
+            return True
+        if status not in ["completed", "failed", "cancelled"]:
+            return False
+        if message.get("event_id") and status == "completed":
+            from services.suite_results import result_id
+            from models.test_suite import TestSuiteExecution
+            expected_suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
+            records = [db.get(TestSuiteExecution, result_id(execution_id, cid)) for cid in expected_suite.case_ids]
+            if any(row is None or row.result in ["failed", "error"] for row in records):
+                status = "failed"
+
         logger.info(f"[WebSocket] 收到测试套完成消息: suite_id={suite_id}, execution_id={execution_id}, status={status}")
         
         # 更新任务队列中的任务状态
@@ -695,6 +734,9 @@ async def handle_test_suite_completed(db: Session, environment_id: str, message:
             "cancelled": "cancelled"
         }
         task_status = task_status_map.get(status, "completed")
+        from services.inbox import notify
+        notify(db, task.executor_id, execution_id, 'execution_completed', '测试任务已结束',
+            f'执行 {execution_id}：{status}', suite_id)
         TaskQueueService.complete_task(db, execution_id, task_status)
         
         # 获取测试套
@@ -730,23 +772,25 @@ async def handle_test_suite_completed(db: Session, environment_id: str, message:
                 from models.test_suite import TestSuiteExecution
                 from sqlalchemy import func
                 
-                # 获取最近一次执行的记录
-                latest_execution_time = db.query(func.max(TestSuiteExecution.executed_at)).filter(
-                    TestSuiteExecution.suite_id == suite_id
-                ).scalar()
-                
-                if latest_execution_time:
-                    latest_executions = db.query(TestSuiteExecution).filter(
-                        TestSuiteExecution.suite_id == suite_id,
-                        TestSuiteExecution.executed_at == latest_execution_time
-                    ).all()
-                    
-                    has_failed = any(e.result in ["failed", "error"] for e in latest_executions)
-                    suite.status = "failed" if has_failed else "completed"
-                else:
-                    # 如果没有执行记录，根据状态设置
+                if message.get("event_id"):
                     suite.status = "completed"
-        
+                else:
+                    # 获取最近一次执行的记录
+                    latest_execution_time = db.query(func.max(TestSuiteExecution.executed_at)).filter(
+                        TestSuiteExecution.suite_id == suite_id
+                    ).scalar()
+
+                    if latest_execution_time:
+                        latest_executions = db.query(TestSuiteExecution).filter(
+                            TestSuiteExecution.suite_id == suite_id,
+                            TestSuiteExecution.executed_at == latest_execution_time
+                        ).all()
+
+                        has_failed = any(e.result in ["failed", "error"] for e in latest_executions)
+                        suite.status = "failed" if has_failed else "completed"
+                    else:
+                        # 如果没有执行记录，根据状态设置
+                        suite.status = "completed"
         db.commit()
         logger.info(f"[WebSocket] 测试套状态已更新: suite_id={suite_id}, status={suite.status}, 任务状态={task_status}, 运行中任务={running_tasks}, 等待中任务={pending_tasks}")
         
@@ -771,26 +815,22 @@ async def handle_test_suite_completed(db: Session, environment_id: str, message:
                 # 构建执行任务消息
                 git_enabled = next_suite.git_enabled == 'true' if hasattr(next_suite, 'git_enabled') and next_suite.git_enabled else False
                 
-                task_message = {
-                    "type": "execute_test_suite",
-                    "suite_id": next_suite.id,
-                    "plan_id": next_suite.plan_id,
-                    "execution_id": next_task.execution_id,
-                    "git_repo_url": (next_suite.git_repo_url or None) if git_enabled else None,
-                    "git_branch": (next_suite.git_branch or None) if git_enabled else None,
-                    "git_token": (next_suite.git_token or None) if git_enabled else None,
-                    "execution_command": next_suite.execution_command,
-                    "case_ids": next_suite.case_ids,
-                    "executor_id": next_task.executor_id
-                }
+                from services.suite_dispatch import build_suite_message
+                task_message = build_suite_message(db, next_suite, next_task.execution_id, next_task.executor_id)
                 
                 # 发送到Agent
                 from api.v1.websocket import manager
-                await manager.send_message(environment_id, task_message)
+                sent = await manager.send_message(environment_id, task_message)
+                if not sent:
+                    next_task.status = "pending"
+                    next_suite.status = "pending"
                 logger.info(f"[WebSocket] 队列中的下一个任务已启动: suite_id={next_suite.id}, execution_id={next_task.execution_id}")
                 db.commit()
         
+        return True
+
     except Exception as e:
         logger.exception(f"[WebSocket] 处理测试套完成消息时出错: {e}")
         db.rollback()
+        return False
 

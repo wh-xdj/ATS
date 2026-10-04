@@ -80,6 +80,7 @@ class TestSuiteService:
             plan_id=plan_id,
             name=suite_data.get("name"),
             description=suite_data.get("description"),
+            git_enabled=suite_data.get("git_enabled", "false"),
             git_repo_url=suite_data.get("git_repo_url"),
             git_branch=suite_data.get("git_branch", "main"),
             git_token=suite_data.get("git_token"),

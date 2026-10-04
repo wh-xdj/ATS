@@ -1,0 +1,12 @@
+server:
+  url: ws://127.0.0.1:8000/ws/agent
+task:
+  timeout: 3600
+integrations:
+  sat:
+    # Use existing repositories; no copies, git reset or automatic installation.
+    root: /Users/xiongdejian/project/python_project/sat
+    ecu_root: /Users/xiongdejian/project/python_project/ecu-simulator
+    # Interpreter must have SAT dependencies for bench mode, pytest for offline mode.
+    python: /Users/xiongdejian/project/python_project/ATS/.venv-integration/bin/python
+    allow_hardware: false

@@ -100,6 +100,12 @@ export const environmentApi = {
       params: { path }
     })
   },
+  uploadWorkspaceFile: async (id: string, path: string, file: File) => {
+    const body = new FormData()
+    body.append('path', path)
+    body.append('file', file)
+    return apiClient.post(`/environments/${id}/workspace/upload`, body, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
   // 获取环境的测试套执行历史
   getSuiteExecutions: async (
     id: string,

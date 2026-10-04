@@ -14,6 +14,9 @@ if "mysql" in settings.DATABASE_URL:
         "init_command": "SET time_zone='+08:00'"
     }
 
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,

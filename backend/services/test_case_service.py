@@ -149,6 +149,7 @@ class TestCaseService:
             name=case_data.name,
             type=case_data.type,
             priority=case_data.priority,
+            is_automated=case_data.is_automated,
             precondition=case_data.precondition,
             steps=case_data.steps or [],
             requirement_ref=case_data.requirement_ref,

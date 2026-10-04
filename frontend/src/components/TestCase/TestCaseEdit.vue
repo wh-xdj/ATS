@@ -177,7 +177,7 @@
                           <template #icon><MoreOutlined /></template>
                         </a-button>
                         <template #overlay>
-                          <a-menu @click="({ key }) => handleStepOperation(key, index)">
+                          <a-menu @click="handleStepMenuClick($event, index)">
                             <a-menu-item key="copy">
                               <CopyOutlined />
                               复制
@@ -209,6 +209,7 @@
               :image="false"
             />
             <div class="steps-footer">
+              <a-button @click="importSteps">导入步骤</a-button>
               <a-button type="dashed" block @click="addStep">
                 <template #icon><PlusOutlined /></template>
                 添加步骤
@@ -344,24 +345,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
-import {
-  SaveOutlined,
-  PlusOutlined,
-  DeleteOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  UploadOutlined,
-  PaperClipOutlined,
-  ImportOutlined,
-  MoreOutlined,
-  CopyOutlined
-} from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import type { FormInstance, Rule } from 'ant-design-vue/es/form'
-import type { TestCase, TestCaseStep, CaseAttachment } from '@/types'
-import { testCaseApi } from '@/api/testCase'
-import { projectApi } from '@/api/project'
+import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { SaveOutlined, PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, UploadOutlined, PaperClipOutlined, MoreOutlined, CopyOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
+import type { FormInstance, Rule } from 'ant-design-vue/es/form';
+import type { TestCase, TestCaseStep, CaseAttachment } from '@/types';
+import { testCaseApi } from '@/api/testCase';
+import { projectApi } from '@/api/project';
 
 interface Props {
   caseId?: string
@@ -397,8 +387,8 @@ const testCase = reactive<Partial<TestCase>>({
 
 const formData = reactive({
   name: '',
-  type: 'functional' as const,
-  priority: 'P2' as const,
+  type: 'functional' as TestCase['type'],
+  priority: 'P2' as TestCase['priority'],
   moduleId: '',
   precondition: '',
   requirementRef: '',
@@ -469,16 +459,16 @@ const loadTestCase = async () => {
     formData.name = data.name || ''
     formData.type = data.type || 'functional'
     formData.priority = data.priority || 'P2'
-    formData.moduleId = (data.moduleId || data.module_id || '') as string
+    formData.moduleId = (data.moduleId || '') as string
     formData.precondition = data.precondition || ''
-    formData.requirementRef = data.requirementRef || data.requirement_ref || ''
+    formData.requirementRef = data.requirementRef || ''
     formData.tags = data.tags || []
     // 为步骤添加唯一ID（如果还没有）
     formData.steps = (data.steps || []).map((step: any, index: number) => ({
       ...step,
       id: step.id || `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
     }))
-    formData.isAutomated = data.isAutomated ?? data.is_automated ?? false
+    formData.isAutomated = data.isAutomated ?? false
 
     // 更新步骤编号
     updateStepNumber()
@@ -895,6 +885,7 @@ defineExpose({
     })
   }
 })
+const handleStepMenuClick = (info: { key: string | number }, index: number) => handleStepOperation(String(info.key), index)
 </script>
 
 <style scoped>

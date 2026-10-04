@@ -173,7 +173,7 @@
               :loading="loading"
               :row-selection="rowSelection"
               :pagination="false"
-              :row-key="record => record.id"
+              row-key="id"
               :scroll="{ x: 1500 }"
               @change="handleTableChange"
               size="middle"
@@ -326,7 +326,7 @@
             :total="pagination.total"
             :show-size-changer="true"
             :show-quick-jumper="true"
-            :show-total="(total) => `共 ${total} 条`"
+            :show-total="paginationTotal"
             @change="handlePaginationChange"
             @show-size-change="handlePaginationChange"
             style="flex: 1; display: flex; justify-content: flex-end;"
@@ -389,42 +389,31 @@
       @success="handleImportSuccess"
     />
   </div>
+  <a-modal v-model:visible="caseExecutionVisible" title="执行所选单用例" @ok="confirmCaseExecution" :confirm-loading="caseExecutionLoading">
+    <p>{{ executionCase?.name }}：仅执行这个用例，复用所选模板的环境和命令。</p>
+    <a-select v-model:value="selectedExecutionTemplate" style="width:100%" placeholder="选择已有执行模板">
+      <a-select-option v-for="suite in executionTemplates" :key="suite.id" :value="suite.id">{{ suite.name }}</a-select-option>
+    </a-select>
+    <a-empty v-if="!caseExecutionLoading && !executionTemplates.length" description="没有包含该用例的ats-sat任务，请先在测试任务中配置" />
+  </a-modal>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, createVNode } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { message, Modal, Input } from 'ant-design-vue'
-import {
-  PlusOutlined,
-  ImportOutlined,
-  FilterOutlined,
-  UnorderedListOutlined,
-  AppstoreOutlined,
-  ReloadOutlined,
-  MoreOutlined,
-  DownOutlined,
-  FolderOutlined,
-  FileOutlined,
-  FileTextOutlined,
-  SettingOutlined,
-  TagOutlined,
-  BugOutlined,
-  CheckSquareOutlined,
-  FlagOutlined,
-  ThunderboltOutlined,
-  CodeOutlined,
-  BarsOutlined
-} from '@ant-design/icons-vue'
+import { testSuiteApi, type TestSuite } from '@/api/testSuite'
+import { testPlanApi } from '@/api/testPlan'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, createVNode } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { message, Modal, Input } from 'ant-design-vue';
+import { PlusOutlined, ImportOutlined, FilterOutlined, UnorderedListOutlined, AppstoreOutlined, ReloadOutlined, MoreOutlined, DownOutlined, FolderOutlined, FileOutlined, FileTextOutlined, SettingOutlined, TagOutlined, BugOutlined, CheckSquareOutlined, FlagOutlined, ThunderboltOutlined, CodeOutlined } from '@ant-design/icons-vue';
 import TestCaseEdit from '@/components/TestCase/TestCaseEdit.vue'
 import TestCaseDetail from '@/components/TestCase/TestCaseDetail.vue'
 import TestCaseFilter from '@/components/TestCase/TestCaseFilter.vue'
 import ImportCasesModal from '@/components/TestCase/ImportCasesModal.vue'
-import { testCaseApi } from '@/api/testCase'
-import { projectApi } from '@/api/project'
-import { useProjectStore } from '@/stores/project'
-import { useUserStore } from '@/stores/user'
-import type { TestCase, Project } from '@/types'
+import { testCaseApi } from '@/api/testCase';
+import { projectApi } from '@/api/project';
+import { useProjectStore } from '@/stores/project';
+import { useUserStore } from '@/stores/user';
+import type { TestCase, Project } from '@/types';
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -843,7 +832,7 @@ const rowSelection = computed(() => ({
   onChange: (keys: string[]) => {
     selectedRowKeys.value = keys
   },
-  onSelectAll: (selected: boolean, selectedRows: TestCase[], changeRows: TestCase[]) => {
+  onSelectAll: (selected: boolean, _selectedRows: TestCase[], _changeRows: TestCase[]) => {
     if (selected) {
       selectedRowKeys.value = [...new Set([...selectedRowKeys.value, ...testCases.value.map(c => c.id)])]
     } else {
@@ -1179,7 +1168,7 @@ const loadTestCases = async () => {
 }
 
 // 处理模块/用例选择（支持 Shift + 左键 批量选择）
-const handleModuleSelect = (keys: string[], info: any) => {
+const handleModuleSelect = (_keys: string[], info: any) => {
   moduleContextMenu.visible = false
   const currentKey = info?.node?.key as string | undefined
   const currentNodeType = info?.node?.nodeType as string | undefined
@@ -1265,21 +1254,12 @@ const handleFilterReset = () => {
 }
 
 // 处理筛选（兼容旧代码）
-const handleFilter = () => {
-  pagination.current = 1
-  loadTestCases()
-}
 
-const resetFilters = () => {
-  filters.level = undefined
-  filters.reviewResult = undefined
-  filters.executionResult = undefined
-  pagination.current = 1
-  loadTestCases()
-}
+
+
 
 // 处理表格变化
-const handleTableChange = (pag: any, filters: any, sorter: any) => {
+const handleTableChange = (pag: any, _filters: any, _sorter: any) => {
   if (pag) {
     pagination.current = pag.current
     pagination.pageSize = pag.pageSize
@@ -1381,8 +1361,30 @@ const handleCopyCase = async (record: TestCase) => {
 }
 
 // 执行用例
-const handleExecuteCase = (record: TestCase) => {
-  message.info('执行功能开发中...')
+const executionCase = ref<TestCase | null>(null)
+const executionTemplates = ref<TestSuite[]>([])
+const caseExecutionVisible = ref(false)
+const caseExecutionLoading = ref(false)
+const selectedExecutionTemplate = ref<string>()
+const handleExecuteCase = async (record: TestCase) => {
+  if (!record.isAutomated) { message.warning('仅自动化用例支持Agent执行'); return }
+  executionCase.value = record; selectedExecutionTemplate.value = undefined; executionTemplates.value = []
+  caseExecutionVisible.value = true; caseExecutionLoading.value = true
+  try {
+    const plans = (await testPlanApi.getTestPlans(projectId.value, { size: 1000 })).items
+    const groups = await Promise.all(plans.map(plan => testSuiteApi.getTestSuites(plan.id)))
+    executionTemplates.value = groups.flatMap(group => group.items).filter(suite => suite.caseIds.includes(record.id) && suite.executionCommand.trim().startsWith('ats-sat'))
+    selectedExecutionTemplate.value = executionTemplates.value[0]?.id
+  } catch { message.error('无法加载执行模板') } finally { caseExecutionLoading.value = false }
+}
+const confirmCaseExecution = async () => {
+  if (!executionCase.value || !selectedExecutionTemplate.value) { message.warning('请选包含该用例的ats-sat模板'); return }
+  caseExecutionLoading.value = true
+  try {
+    await testCaseApi.executeCase(executionCase.value.id, selectedExecutionTemplate.value)
+    message.success('单用例任务已提交；实际结果可在测试任务/执行记录查看'); caseExecutionVisible.value = false
+  } catch (error: any) { message.error(error.response?.data?.detail || '执行失败') }
+  finally { caseExecutionLoading.value = false }
 }
 
 // 导入
@@ -1597,7 +1599,7 @@ const handleModuleDrop = async (info: any) => {
     try {
       // 更新用例的 module_id
       await testCaseApi.updateTestCase(projectId.value, caseId, {
-        module_id: targetModuleId
+        moduleId: targetModuleId
       })
       message.success('用例已移动')
 
@@ -1628,7 +1630,7 @@ const handleModuleDrop = async (info: any) => {
       if (isDropCase) {
         const dropCaseId = dropKey.replace('case_', '')
         const dropCase = testCases.value.find(c => c.id === dropCaseId)
-        newParentId = dropCase?.moduleId
+        newParentId = dropCase?.moduleId || undefined
       } else {
         newParentId = dropKey
       }
@@ -1972,32 +1974,11 @@ const getReviewResultLabel = (result: string) => {
   return labels[result] || result
 }
 
-const getExecutionResultColor = (status: string) => {
-  const colors: Record<string, string> = {
-    not_executed: 'default',
-    passed: 'green',
-    failed: 'red',
-    blocked: 'orange',
-    skipped: 'gray'
-  }
-  return colors[status] || 'default'
-}
 
-const getExecutionResultLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    not_executed: '未执行',
-    passed: '成功',
-    failed: '失败',
-    blocked: '阻塞',
-    skipped: '跳过'
-  }
-  return labels[status] || status
-}
 
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD')
-}
+
+
+
 
 // 格式化日期时间（包含时分秒）
 const formatDateTime = (date: string) => {
@@ -2076,6 +2057,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
 })
+const paginationTotal = (total: number) => `共 ${total} 条`
 </script>
 
 <style scoped>

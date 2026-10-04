@@ -174,7 +174,7 @@
               :data-source="projectStats"
               :loading="statsLoading"
               :pagination="statsPagination"
-              :row-key="record => record.id"
+              row-key="id"
               size="small"
               @change="handleStatsTableChange"
             >
@@ -256,14 +256,14 @@
           <a-range-picker
             v-model:value="reportForm.dateRange"
             style="width: 100%"
-            placeholder="请选择时间范围"
+            :placeholder="['开始日期', '结束日期']"
           />
         </a-form-item>
 
         <a-form-item label="包含内容">
           <a-checkbox-group v-model:value="reportForm.includeContent">
             <a-checkbox value="overview">概览统计</a-checkbox>
-            <a-checkbox value="charts">图表分析</a-checkbox>
+            <a-checkbox value="charts" disabled>图表分析（未支持）</a-checkbox>
             <a-checkbox value="details">详细数据</a-checkbox>
             <a-checkbox value="trends">趋势分析</a-checkbox>
           </a-checkbox-group>
@@ -271,8 +271,8 @@
 
         <a-form-item label="报告格式">
           <a-radio-group v-model:value="reportForm.format">
-            <a-radio value="pdf">PDF</a-radio>
-            <a-radio value="excel">Excel</a-radio>
+            <a-radio value="pdf" disabled>PDF（未支持）</a-radio>
+            <a-radio value="excel" disabled>Excel（未支持）</a-radio>
             <a-radio value="html">HTML</a-radio>
           </a-radio-group>
         </a-form-item>
@@ -282,31 +282,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
-import {
-  ReloadOutlined,
-  DownloadOutlined,
-  FileTextOutlined,
-  ProjectOutlined,
-  ScheduleOutlined,
-  CheckCircleOutlined,
-  ExperimentOutlined,
-  PlayCircleOutlined,
-  PauseCircleOutlined,
-  ExclamationCircleOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  MinusOutlined
-} from '@ant-design/icons-vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
+import { message } from 'ant-design-vue';
+import { ReloadOutlined, DownloadOutlined, FileTextOutlined, ProjectOutlined, ScheduleOutlined, CheckCircleOutlined, ExperimentOutlined, PlayCircleOutlined, ExclamationCircleOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined } from '@ant-design/icons-vue';
 import * as echarts from 'echarts'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import dashboardApi from '@/api/dashboard'
-import { projectApi } from '@/api/project'
-import type { Dayjs } from 'dayjs'
-import type { Project } from '@/types'
+import dashboardApi, { type ReportRequest } from '@/api/dashboard'
+import { projectApi } from '@/api/project';
+import type { Dayjs } from 'dayjs';
+import type { Project } from '@/types';
 
 dayjs.extend(relativeTime)
 
@@ -347,8 +333,8 @@ const statusChartRef = ref()
 const executionChartRef = ref()
 
 // 图表数据
-const trendPeriod = ref('week')
-const executionPeriod = ref('week')
+const trendPeriod = ref<'week' | 'month' | 'quarter'>('week')
+const executionPeriod = ref<'week' | 'month' | 'quarter'>('week')
 
 const trendOptions = [
   { label: '最近7天', value: 'week' },
@@ -384,10 +370,10 @@ const statsPagination = reactive({
 // 报告表单
 const reportModalVisible = ref(false)
 const reportForm = reactive({
-  type: 'summary',
+  type: 'summary' as ReportRequest['type'],
   dateRange: null as [Dayjs, Dayjs] | null,
-  includeContent: ['overview', 'charts'],
-  format: 'pdf'
+  includeContent: ['overview', 'details', 'trends'],
+  format: 'html' as ReportRequest['format']
 })
 
 // 表格列配置
@@ -442,7 +428,7 @@ const projectStatsColumns = [
 const loadProjects = async () => {
   try {
     const response = await projectApi.getProjects()
-    projects.value = response.items || response.data?.items || []
+    projects.value = response.items || []
   } catch (error) {
     console.error('Failed to load projects:', error)
     projects.value = []
@@ -797,9 +783,9 @@ const confirmGenerateReport = async () => {
     reportModalVisible.value = false
 
     // 下载报告
-    if (response.data.downloadUrl) {
-      window.open(response.data.downloadUrl)
-    }
+    const blob = await dashboardApi.downloadReport(response.id)
+    const url = URL.createObjectURL(blob); const link = document.createElement('a')
+    link.href = url; link.download = 'ATS-report.html'; link.click(); URL.revokeObjectURL(url)
   } catch (error) {
     console.error('Failed to generate report:', error)
     message.error('报告生成失败')

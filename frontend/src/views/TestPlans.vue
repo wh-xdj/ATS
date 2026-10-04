@@ -104,7 +104,7 @@
           :data-source="plans"
           :loading="loading"
           :pagination="false"
-          :row-key="record => record.id"
+          row-key="id"
           :scroll="{ x: 1200, y: 'calc(100vh - 420px)' }"
           @change="handleTableChange"
           size="middle"
@@ -213,7 +213,7 @@
                     更多
                   </a-button>
                   <template #overlay>
-                    <a-menu @click="(info) => handleActionClick(info.key, record)">
+                    <a-menu @click="handleActionMenuEvent($event, record)">
                       <a-menu-item key="execute" v-if="canExecutePlan(record)">
                         执行
                       </a-menu-item>
@@ -248,7 +248,7 @@
           :total="pagination.total"
           :show-size-changer="true"
           :show-quick-jumper="true"
-          :show-total="(total) => `共 ${total} 条`"
+          :show-total="paginationTotal"
           @change="handlePaginationChange"
           @show-size-change="handlePaginationChange"
         />
@@ -281,7 +281,7 @@
     >
       <TestPlanEdit
         v-if="editModalVisible"
-        :plan-id="editingPlanId"
+        :plan-id="editingPlanId || undefined"
         :project-id="projectId || ''"
         @save="handlePlanSaved"
         @cancel="closeEditModal"
@@ -330,32 +330,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  DownloadOutlined,
-  ScheduleOutlined,
-  ExperimentOutlined,
-  PieChartOutlined,
-  PlayCircleOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined,
-  MoreOutlined
-} from '@ant-design/icons-vue'
-import type { Dayjs } from 'dayjs'
-import type { TestPlan, Environment, Project } from '@/types'
-import { testPlanApi } from '@/api/testPlan'
-import { useProjectStore } from '@/stores/project'
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { message } from 'ant-design-vue';
+import { PlusOutlined, ReloadOutlined, DownloadOutlined, ExperimentOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons-vue';
+import type { Dayjs } from 'dayjs';
+import type { TestPlan, Environment, Project, CaseStatusCounts } from '@/types';
+import { testPlanApi } from '@/api/testPlan';
+import { useProjectStore } from '@/stores/project';
 import TestPlanDetail from '@/components/TestPlan/TestPlanDetail.vue'
 import TestPlanEdit from '@/components/TestPlan/TestPlanEdit.vue'
 
-const route = useRoute()
+
 const router = useRouter()
 const projectStore = useProjectStore()
 
@@ -378,7 +364,7 @@ const projectId = computed<string | undefined>(() => {
   return projects.value[0]?.id
 })
 
-const currentProject = computed(() => projectStore.currentProject)
+
 
 // 响应式数据
 const loading = ref(false)
@@ -790,6 +776,14 @@ const canDeletePlan = (plan: TestPlan) => {
   return plan.status === 'not_started' || plan.status === 'completed'
 }
 
+const editSelectedPlan = () => {
+  if (selectedPlan.value) editPlan(selectedPlan.value.id)
+}
+
+const executeSelectedPlan = () => {
+  if (selectedPlan.value) executePlan(selectedPlan.value)
+}
+
 // 辅助方法
 const getStatusColor = (status: string) => {
   const colorMap: Record<string, string> = {
@@ -837,12 +831,7 @@ const getProgressPercent = (plan: TestPlan) => {
   return total > 0 ? Math.round((executed / total) * 100) : 0
 }
 
-const getProgressStatus = (plan: TestPlan) => {
-  const percent = getProgressPercent(plan)
-  if (percent === 100) return 'success'
-  if (plan.status === 'overdue') return 'exception'
-  return 'active'
-}
+
 
 // 获取分段进度条数据
 const getProgressSegments = (plan: TestPlan) => {
@@ -861,7 +850,7 @@ const getProgressSegments = (plan: TestPlan) => {
   }
 
   // 定义状态顺序和标签
-  const statusOrder = [
+  const statusOrder: Array<{ status: keyof CaseStatusCounts; label: string; color: string }> = [
     { status: 'pass', label: '通过', color: '#52c41a' },
     { status: 'fail', label: '失败', color: '#ff4d4f' },
     { status: 'broken', label: '阻塞', color: '#faad14' },
@@ -947,6 +936,8 @@ watch(
 defineExpose({
   refreshPlans
 })
+const paginationTotal = (total: number) => `共 ${total} 条`
+const handleActionMenuEvent = (info: { key: string | number }, record: TestPlan) => handleActionClick(String(info.key), record)
 </script>
 
 <style scoped>

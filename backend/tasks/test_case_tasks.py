@@ -1,6 +1,7 @@
 """测试用例相关任务"""
 from typing import Dict, Any
-from uuid import UUID
+import json
+import uuid
 import pandas as pd
 from core.celery_app import celery_app
 from database import SessionLocal
@@ -28,7 +29,7 @@ def import_test_cases_task(project_id: str, file_path: str, user_id: str) -> Dic
             "errors": []
         }
         
-        project = db.query(Project).filter(Project.id == UUID(project_id)).first()
+        project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             results["errors"].append("项目不存在")
             return results
@@ -43,26 +44,31 @@ def import_test_cases_task(project_id: str, file_path: str, user_id: str) -> Dic
                 
                 # 检查用例是否存在
                 existing_case = db.query(TestCase).filter(
+                    TestCase.project_id == project_id,
                     TestCase.case_code == str(row['case_code'])
                 ).first()
                 
+                if not existing_case and db.query(TestCase).filter(TestCase.case_code == str(row['case_code'])).first():
+                    results['failed'] += 1
+                    results['errors'].append(f'第{index+2}行: 用例编号已在其他项目使用，未修改其他项目')
+                    continue
                 if existing_case:
                     # 更新用例
                     for key, value in row.items():
-                        if hasattr(existing_case, key) and not pd.isna(value):
+                        if key in ['name', 'type', 'priority', 'precondition', 'module_path', 'requirement_ref'] and not pd.isna(value):
                             setattr(existing_case, key, value)
                     results["updated"] += 1
                 else:
                     # 创建新用例
                     case_data = {
-                        "project_id": UUID(project_id),
+                        "project_id": project_id,
                         "case_code": str(row['case_code']),
                         "name": str(row['name']),
                         "type": str(row.get('type', 'functional')),
                         "priority": str(row.get('priority', 'medium')),
                         "precondition": str(row.get('precondition', '')) if not pd.isna(row.get('precondition')) else None,
-                        "steps": row.get('steps', []),
-                        "created_by": UUID(user_id),
+                        "steps": json.loads(row['steps']) if isinstance(row.get('steps'), str) else [],
+                        "created_by": user_id,
                         "status": "not_executed"
                     }
                     new_case = TestCase(**case_data)
@@ -75,10 +81,7 @@ def import_test_cases_task(project_id: str, file_path: str, user_id: str) -> Dic
         
         db.commit()
         
-        # 清理临时文件
-        import os
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Input ownership belongs to the caller; never delete arbitrary supplied paths.
         
         return results
         
@@ -96,11 +99,11 @@ def export_test_cases_task(project_id: str, filters: Dict[str, Any]) -> str:
         from utils.excel_handler import export_to_excel
         
         # 构建查询
-        query = db.query(TestCase).filter(TestCase.project_id == UUID(project_id))
+        query = db.query(TestCase).filter(TestCase.project_id == project_id)
         
         # 应用过滤条件
         if filters.get('module_id'):
-            query = query.filter(TestCase.module_id == UUID(filters['module_id']))
+            query = query.filter(TestCase.module_id == filters['module_id'])
         if filters.get('type'):
             query = query.filter(TestCase.type == filters['type'])
         if filters.get('priority'):
@@ -130,8 +133,8 @@ def export_test_cases_task(project_id: str, filters: Dict[str, Any]) -> str:
             })
         
         # 保存文件
-        import time
-        file_path = f"/tmp/export_{project_id}_{int(time.time())}.xlsx"
+        import tempfile
+        file_path = str(__import__('pathlib').Path(tempfile.mkdtemp(prefix='ats-export-')) / ('cases-' + str(uuid.uuid4()) + '.xlsx'))
         export_to_excel(export_data, file_path, "测试用例")
         
         return file_path

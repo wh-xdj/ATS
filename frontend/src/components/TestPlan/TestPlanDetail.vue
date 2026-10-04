@@ -2,6 +2,10 @@
   <div class="test-plan-detail">
     <a-spin :spinning="loading">
       <div v-if="plan" class="plan-content">
+        <a-space style="margin-bottom: 12px">
+          <a-button @click="emit('edit')">编辑计划</a-button>
+          <a-button @click="emit('execute')">执行计划</a-button>
+        </a-space>
         <!-- 基本信息 -->
         <a-card title="基本信息" class="info-card">
           <a-descriptions :column="2" bordered>
@@ -109,7 +113,7 @@
             :data-source="executions"
             :loading="executionsLoading"
             :pagination="executionPagination"
-            :row-key="record => record.id"
+            row-key="id"
             size="small"
             @change="handleExecutionTableChange"
           >
@@ -168,16 +172,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
-import type { TestPlan, TestExecution } from '@/types'
-import { testPlanApi } from '@/api/testPlan'
+import { ref, computed, onMounted, watch } from 'vue';
+import { message } from 'ant-design-vue';
+import type { TestPlan, TestExecution } from '@/types';
+import { testPlanApi } from '@/api/testPlan';
 
 interface Props {
   plan: TestPlan
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (event: 'edit'): void
+  (event: 'execute'): void
+}>()
 
 // 响应式数据
 const loading = ref(false)
@@ -275,7 +283,7 @@ const viewExecutionLogs = async (executionId: string) => {
   }
 }
 
-const viewExecutionDetail = (executionId: string) => {
+const viewExecutionDetail = (_executionId: string) => {
   // 这里可以打开执行详情的抽屉或模态框
   message.info('执行详情功能开发中')
 }
@@ -355,16 +363,14 @@ const getProgressStatus = () => {
 }
 
 const getPassedCases = () => {
-  // 这里应该从实际数据计算
-  return Math.floor((plan.value.executedCases || 0) * 0.8)
+  return plan.value.caseStatusCounts?.pass || 0
 }
 
 const getFailedCases = () => {
-  // 这里应该从实际数据计算
-  return Math.floor((plan.value.executedCases || 0) * 0.2)
+  return (plan.value.caseStatusCounts?.fail || 0) + (plan.value.caseStatusCounts?.error || 0)
 }
 
-const formatDate = (date: string) => {
+const formatDate = (date?: string) => {
   if (!date) return '-'
   return new Date(date).toLocaleDateString('zh-CN')
 }

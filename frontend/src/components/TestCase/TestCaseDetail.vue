@@ -42,8 +42,8 @@
               </a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="是否自动化">
-              <a-tag :color="(testCase.isAutomated ?? testCase.is_automated) ? 'green' : 'default'">
-                {{ (testCase.isAutomated ?? testCase.is_automated) ? '是' : '否' }}
+              <a-tag :color="(testCase.isAutomated) ? 'green' : 'default'">
+                {{ (testCase.isAutomated) ? '是' : '否' }}
               </a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="所属模块">
@@ -160,16 +160,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
-import {
-  EditOutlined,
-  CopyOutlined,
-  PlayCircleOutlined,
-  DeleteOutlined
-} from '@ant-design/icons-vue'
-import { testCaseApi } from '@/api/testCase'
-import type { TestCase, CaseAttachment, TestExecution } from '@/types'
+import { ref, onMounted, watch } from 'vue';
+import { message } from 'ant-design-vue';
+import { EditOutlined } from '@ant-design/icons-vue';
+import { testCaseApi } from '@/api/testCase';
+import type { TestCase, CaseAttachment, TestExecution } from '@/types';
 import dayjs from 'dayjs'
 
 interface Props {
@@ -338,12 +333,12 @@ const formatPrecondition = (text: string | null | undefined) => {
   return text.replace(urlRegex, '<a href="$1" target="_blank" style="color: #1890ff;">$1</a>')
 }
 
-const downloadAttachment = (attachment: CaseAttachment) => {
+const downloadAttachment = (_attachment: CaseAttachment) => {
   // 实现文件下载逻辑
   message.info('下载功能开发中...')
 }
 
-const viewExecutionLog = (execution: TestExecution) => {
+const viewExecutionLog = (_execution: TestExecution) => {
   // 实现查看执行日志逻辑
   message.info('日志查看功能开发中...')
 }

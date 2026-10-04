@@ -65,6 +65,7 @@
     <div class="scrollable-content">
       <!-- 通知配置 -->
       <a-card title="通知配置" class="form-card" size="small">
+        <a-alert type="info" show-icon message="当前自动产生站内通知。此处外发配置仅保存，邮件、Webhook、短信发送尚未支持。" style="margin-bottom:12px" />
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="通知方式">
@@ -116,7 +117,7 @@
           :columns="caseColumns"
           :data-source="selectedCases"
           :pagination="casePagination"
-          :row-key="record => record.id"
+          row-key="id"
           size="small"
           class="selected-cases-table"
           :scroll="{ x: 800 }"
@@ -203,15 +204,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
-import dayjs, { Dayjs } from 'dayjs'
-import { testCaseApi } from '@/api/testCase'
-import { testPlanApi } from '@/api/testPlan'
-import { projectApi } from '@/api/project'
+import { ref, reactive, computed, onMounted } from 'vue';
+import { message } from 'ant-design-vue';
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import dayjs, { Dayjs } from 'dayjs';
+import { testCaseApi } from '@/api/testCase';
+import { environmentApi } from '@/api/environment'
+import { testPlanApi } from '@/api/testPlan';
+import { projectApi } from '@/api/project';
 import TestCaseSelector from '@/components/TestCase/TestCaseSelector.vue'
-import type { TestCase, TestPlan, Environment } from '@/types'
+import type { TestCase, TestPlan, Environment, PlanEnvironmentConfig } from '@/types';
 
 interface Props {
   planId?: string
@@ -240,7 +242,7 @@ const formData = reactive({
   startDate: null as Dayjs | null,
   endDate: null as Dayjs | null,
   environmentId: '',
-  environmentConfig: {} as Record<string, string>,
+  environmentConfig: {} as PlanEnvironmentConfig,
   executionStrategy: 'sequential' as 'sequential' | 'parallel' | 'priority',
   retryOnFailure: false,
   retryCount: 2,
@@ -266,9 +268,7 @@ const casePagination = reactive({
 
 // 计算属性
 const isEditMode = computed(() => !!props.planId)
-const selectedEnvironment = computed(() =>
-  environments.value.find(env => env.id === formData.environmentId)
-)
+
 
 // 表格列定义
 const caseColumns = [
@@ -330,7 +330,7 @@ const loadModules = async () => {
 
 const loadEnvironments = async () => {
   try {
-    environments.value = []
+    environments.value = (await environmentApi.getEnvironments({ page: 1, size: 1000 })).items
   } catch (error) {
     console.error('Failed to load environments:', error)
   }
@@ -350,21 +350,22 @@ const loadPlanData = async () => {
 
     console.log('加载的计划数据:', plan)
 
+    const settings = plan.environmentConfig || {}
     Object.assign(formData, {
       name: plan.name || '',
       planType: plan.planType || (plan as any).plan_type || 'manual',
       description: plan.description || '',
-      notes: plan.notes || '',
+      notes: settings.notes || '',
       startDate: (plan.startDate || (plan as any).start_date) ? dayjs(plan.startDate || (plan as any).start_date) : null,
       endDate: (plan.endDate || (plan as any).end_date) ? dayjs(plan.endDate || (plan as any).end_date) : null,
       environmentId: plan.environmentId || (plan as any).environment_id || '',
       environmentConfig: plan.environmentConfig || (plan as any).environment_config || {},
-      executionStrategy: plan.executionStrategy || (plan as any).execution_strategy || 'sequential',
-      retryOnFailure: plan.retryOnFailure !== undefined ? plan.retryOnFailure : ((plan as any).retry_on_failure !== undefined ? (plan as any).retry_on_failure : false),
-      retryCount: plan.retryCount || (plan as any).retry_count || 2,
-      notificationMethods: plan.notificationMethods || (plan as any).notification_methods || [],
-      notificationRecipients: plan.notificationRecipients || (plan as any).notification_recipients || [],
-      notificationEvents: plan.notificationEvents || (plan as any).notification_events || []
+      executionStrategy: settings.executionStrategy || 'sequential',
+      retryOnFailure: settings.retryOnFailure ?? false,
+      retryCount: settings.retryCount ?? 2,
+      notificationMethods: settings.notificationMethods || [],
+      notificationRecipients: settings.notificationRecipients || [],
+      notificationEvents: settings.notificationEvents || []
     })
 
     if (plan.testCases && Array.isArray(plan.testCases)) {
@@ -412,7 +413,7 @@ const handleDateChange = () => {
   formRef.value?.validateFields(['endDate'])
 }
 
-const handleCasesSelected = (caseIds: string[], cases: TestCase[]) => {
+const handleCasesSelected = (_caseIds: string[], cases: TestCase[]) => {
   const existingIds = new Set(selectedCases.value.map(c => c.id))
   const newCases = cases.filter(c => !existingIds.has(c.id))
 
@@ -487,7 +488,7 @@ const viewCaseDetail = (caseId: string) => {
 
 const handleSubmit = async () => {
   try {
-    formRef.value?.validateFields()
+    await formRef.value?.validateFields()
 
     saving.value = true
 
@@ -499,7 +500,16 @@ const handleSubmit = async () => {
       startDate: formData.startDate ? formData.startDate.toISOString() : null,
       endDate: formData.endDate ? formData.endDate.toISOString() : null,
       environmentId: formData.environmentId || null,
-      environmentConfig: formData.environmentConfig || {},
+      environmentConfig: {
+        ...formData.environmentConfig,
+        notes: formData.notes,
+        executionStrategy: formData.executionStrategy,
+        retryOnFailure: formData.retryOnFailure,
+        retryCount: formData.retryCount,
+        notificationMethods: formData.notificationMethods,
+        notificationRecipients: formData.notificationRecipients,
+        notificationEvents: formData.notificationEvents
+      },
       executionStrategy: formData.executionStrategy || 'sequential',
       retryOnFailure: formData.retryOnFailure || false,
       retryCount: formData.retryCount || 2,

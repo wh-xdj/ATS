@@ -20,7 +20,7 @@
             :columns="columns"
             :data-source="environments"
             :pagination="false"
-            :row-key="record => record.id"
+            row-key="id"
             :scroll="{ x: 1000, y: 'calc(100vh - 340px)' }"
             @change="handleTableChange"
           >
@@ -36,7 +36,7 @@
 
             <template v-else-if="column.key === 'tags'">
               <a-space v-if="record.tags" wrap :size="4">
-                <a-tag v-for="tag in (record.tags || '').split(',').filter(t => t.trim())" :key="tag.trim()" size="small">
+                <a-tag v-for="tag in tagNames(record.tags || '')" :key="tag.trim()" size="small">
                   {{ tag.trim() }}
                 </a-tag>
               </a-space>
@@ -112,7 +112,7 @@
           :total="pagination.total"
           :show-size-changer="true"
           :show-quick-jumper="true"
-          :show-total="(total) => `共 ${total} 条`"
+          :show-total="paginationTotal"
           @change="handlePaginationChange"
           @show-size-change="handlePaginationChange"
         />
@@ -273,7 +273,7 @@
           <span v-else>-</span>
         </a-descriptions-item>
         <a-descriptions-item label="最后心跳时间">
-          {{ selectedEnvironment.lastHeartbeat || selectedEnvironment.last_heartbeat ? formatDateTime(selectedEnvironment.lastHeartbeat || selectedEnvironment.last_heartbeat) : '-' }}
+          {{ selectedEnvironment.lastHeartbeat ? formatDateTime(selectedEnvironment.lastHeartbeat) : '-' }}
         </a-descriptions-item>
         <a-descriptions-item label="描述">
           {{ selectedEnvironment.description || '-' }}
@@ -338,7 +338,7 @@
         :data-source="executionHistory"
         :loading="executionHistoryLoading"
         :pagination="executionPagination"
-        :row-key="record => record.id"
+        row-key="id"
         :scroll="{ x: 1040 }"
         @change="handleExecutionTableChange"
         size="middle"
@@ -434,7 +434,7 @@
             :columns="workspaceColumns"
             :data-source="workspaceFiles"
             :pagination="false"
-            :row-key="record => record.path"
+            row-key="path"
             :scroll="{ x: 730 }"
             size="small"
           >
@@ -499,6 +499,18 @@
       </div>
     </a-modal>
 
+    <a-modal
+      v-model:visible="createFolderModalVisible"
+      title="创建文件夹"
+      @ok="handleCreateFolder"
+    >
+      <a-input v-model:value="createFolderName" placeholder="文件夹名称" />
+    </a-modal>
+
+    <a-modal v-model:visible="uploadModalVisible" title="上传到本地Agent工作空间" @ok="confirmUpload" :confirm-loading="uploading">
+      <a-alert message="最大10MB；已有文件不会覆盖。" type="info" />
+      <input type="file" @change="chooseUpload" aria-label="选择上传文件" />
+    </a-modal>
     <!-- 文件查看对话框 -->
     <a-modal
       v-model:visible="fileViewModalVisible"
@@ -594,29 +606,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  CopyOutlined,
-  UploadOutlined,
-  FolderAddOutlined,
-  FolderOutlined,
-  FileOutlined,
-  DesktopOutlined,
-  WifiOutlined,
-  GlobalOutlined,
-  DashboardOutlined,
-  LaptopOutlined,
-  CodeOutlined,
-  HddOutlined
-} from '@ant-design/icons-vue'
-import { environmentApi } from '@/api/environment'
-import { testSuiteApi } from '@/api/testSuite'
-import { useProjectStore } from '@/stores/project'
-import type { Environment, TestExecution } from '@/types'
-import type { Dayjs } from 'dayjs'
+import { ref, reactive, onMounted } from 'vue';
+import { message, Modal } from 'ant-design-vue';
+import { PlusOutlined, ReloadOutlined, CopyOutlined, UploadOutlined, FolderAddOutlined, FolderOutlined, FileOutlined, DesktopOutlined, DashboardOutlined } from '@ant-design/icons-vue';
+import { environmentApi } from '@/api/environment';
+import { testSuiteApi } from '@/api/testSuite';
+
+import type { Environment } from '@/types';
+import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -649,7 +646,7 @@ const executionHistory = ref<Array<{
   executedAt: string
   duration: string | null
   executionId: string | null
-  logId: string | null
+  logId?: string | null
   caseCount: number
 }>>([])
 const executionLog = ref('')
@@ -670,8 +667,8 @@ const fileViewLoading = ref(false)
 const currentFile = ref<any>(null)
 const fileContent = ref<string>('')
 
-const projectStore = useProjectStore()
-const projectId = computed(() => projectStore.currentProject?.id || '')
+
+
 
 const environments = ref<Environment[]>([])
 
@@ -786,21 +783,6 @@ const loadEnvironments = async () => {
         lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
       }))
       pagination.total = response.total || 0
-    } else if (Array.isArray(response)) {
-      // 兼容旧格式（直接返回数组）
-      environments.value = response.map((env: any) => ({
-        ...env,
-        remoteWorkDir: env.remoteWorkDir || env.remote_work_dir || '',
-        nodeIp: env.nodeIp || env.node_ip || '',
-        osType: env.osType || env.os_type || '',
-        osVersion: env.osVersion || env.os_version || '',
-        cpuInfo: env.cpuInfo || env.cpu_info || null,
-        memoryInfo: env.memoryInfo || env.memory_info || null,
-        diskInfo: env.diskInfo || env.disk_info || null,
-        isOnline: env.isOnline !== undefined ? env.isOnline : (env.is_online !== undefined ? env.is_online : false),
-        lastHeartbeat: env.lastHeartbeat || env.last_heartbeat || ''
-      }))
-      pagination.total = response.length
     } else {
       environments.value = []
       pagination.total = 0
@@ -1073,8 +1055,20 @@ const handleWorkspaceSearch = () => {
   loadWorkspaceFiles()
 }
 
-const uploadFile = () => {
-  message.info('上传文件功能开发中')
+const uploadModalVisible = ref(false)
+const uploading = ref(false)
+const selectedUpload = ref<File | null>(null)
+const uploadFile = () => { selectedUpload.value = null; uploadModalVisible.value = true }
+const chooseUpload = (event: Event) => { selectedUpload.value = (event.target as HTMLInputElement).files?.[0] || null }
+const confirmUpload = async () => {
+  if (!selectedUpload.value || !currentWorkspaceEnvironment.value) { message.warning('请选择文件'); return }
+  if (selectedUpload.value.size > 10 * 1024 * 1024) { message.error('最大上传10MB'); return }
+  uploading.value = true
+  try {
+    await environmentApi.uploadWorkspaceFile(currentWorkspaceEnvironment.value.id, currentPath.value, selectedUpload.value)
+    message.success('文件已写入Agent工作空间'); uploadModalVisible.value = false; await loadWorkspaceFiles()
+  } catch (error: any) { message.error(error.response?.data?.detail || '上传失败，已有文件不会覆盖') }
+  finally { uploading.value = false }
 }
 
 const createFolderName = ref('')
@@ -1482,6 +1476,9 @@ const deleteEnvironment = (id: string) => {
 onMounted(() => {
   loadEnvironments()
 })
+const paginationTotal = (total: number) => `共 ${total} 条`
+
+const tagNames = (tags: string) => tags.split(',').map(tag => tag.trim()).filter(Boolean)
 </script>
 
 <style scoped>

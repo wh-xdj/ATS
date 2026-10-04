@@ -33,7 +33,8 @@ class TaskExecutor:
         self.work_dir = work_dir
         self.on_log = on_log
         self.logger = logger
-        self.tasks: Dict[str, subprocess.Popen] = {}  # task_id -> process
+        self.cancelled = set()
+        self.tasks: Dict[str, asyncio.subprocess.Process] = {}  # task_id -> process
         self.task_logs: Dict[str, Path] = {}  # task_id -> log_file_path
     
     def _get_task_dir(self, task_id: str) -> Path:
@@ -90,218 +91,69 @@ class TaskExecutor:
                     self.logger.error(f"日志回调函数执行失败: {e}")
     
     async def execute_task(self, task_config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        执行任务
-        
-        Args:
-            task_config: 任务配置字典，包含:
-                - task_id: 任务ID
-                - command: 要执行的命令
-                - work_dir: 任务工作目录（可选）
-                - env_vars: 环境变量字典（可选）
-                - timeout: 超时时间（秒，可选）
-        
-        Returns:
-            任务执行结果字典
-        """
-        task_id = task_config.get("task_id")
-        command = task_config.get("command")
-        task_work_dir = task_config.get("work_dir")
-        env_vars = task_config.get("env_vars", {})
-        timeout = task_config.get("timeout", 3600)
-        
+        """Execute asynchronously so silent commands cannot block heartbeat/cancel."""
+        try:
+            from .sat_runner import terminate_process
+        except ImportError:
+            from sat_runner import terminate_process
+        task_id, command = task_config.get("task_id"), task_config.get("command")
         if not task_id or not command:
             raise ValueError("task_id和command是必需的")
-        
-        start_time = datetime.now()
-        
-        # 创建任务目录
-        if task_work_dir:
-            task_dir = Path(task_work_dir).expanduser().resolve()
-        else:
-            task_dir = self._get_task_dir(task_id)
-        
+        task_dir = Path(task_config["work_dir"]).expanduser().resolve() if task_config.get("work_dir") else self._get_task_dir(task_id)
         ensure_dir(task_dir)
-        
-        # 准备环境变量
         env = os.environ.copy()
-        env.update(env_vars)
-        
-        # 准备命令
-        if isinstance(command, str):
-            # 如果是字符串，按shell方式执行
-            shell = True
-            cmd = command
-        else:
-            # 如果是列表，直接执行
-            shell = False
-            cmd = command
-        
-        await self._log(task_id, "info", f"开始执行任务: {command}")
-        await self._log(task_id, "info", f"工作目录: {task_dir}")
-        
+        env.update(task_config.get("env_vars", {}))
+        started, output, process = datetime.now(), [], None
+        status, error = "error", None
+        timeout = task_config.get("timeout", 3600)
         try:
-            # 启动进程
-            process = subprocess.Popen(
-                cmd,
-                shell=shell,
-                cwd=str(task_dir),
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # 合并stderr到stdout
-                universal_newlines=True,
-                bufsize=1
-            )
-            
-            self.tasks[task_id] = process
-            
-            # 实时读取输出
-            output_lines = []
-            try:
-                # 使用asyncio.wait_for实现超时
-                async def read_output():
-                    while True:
-                        line = process.stdout.readline()
-                        if not line:
-                            if process.poll() is not None:
-                                break
-                            await asyncio.sleep(0.1)
-                            continue
-                        
-                        line = line.rstrip()
-                        output_lines.append(line)
-                        await self._log(task_id, "info", line)
-                
-                await asyncio.wait_for(read_output(), timeout=timeout)
-            
-            except asyncio.TimeoutError:
-                # 超时，终止进程
-                await self._log(task_id, "error", f"任务执行超时（{timeout}秒），正在终止...")
-                process.terminate()
-                
-                # 等待进程结束，如果5秒后还没结束，强制杀死
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                
-                end_time = datetime.now()
-                duration = (end_time - start_time).total_seconds()
-                
-                output = "\n".join(output_lines)
-                
-                return {
-                    "task_id": task_id,
-                    "status": "timeout",
-                    "exit_code": -1,
-                    "output": output,
-                    "error": f"任务执行超时（{timeout}秒）",
-                    "duration": duration
-                }
-            
-            # 等待进程结束
-            exit_code = process.wait()
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            
-            # 读取剩余输出
-            remaining_output = process.stdout.read()
-            if remaining_output:
-                lines = remaining_output.rstrip().split("\n")
-                for line in lines:
-                    if line:
-                        output_lines.append(line)
-                        await self._log(task_id, "info", line)
-            
-            output = "\n".join(output_lines)
-            
-            # 确定状态
-            if exit_code == 0:
-                status = "success"
-                error = None
+            options = dict(cwd=str(task_dir), env=env, stdout=asyncio.subprocess.PIPE,
+                           stderr=asyncio.subprocess.STDOUT, start_new_session=(os.name == "posix"))
+            if isinstance(command, str):
+                process = await asyncio.create_subprocess_shell(command, **options)
             else:
-                status = "failed"
-                error = f"进程退出码: {exit_code}"
-            
-            await self._log(
-                task_id,
-                "info",
-                f"任务执行完成，状态: {status}，退出码: {exit_code}，耗时: {duration:.2f}秒"
-            )
-            
-            return {
-                "task_id": task_id,
-                "status": status,
-                "exit_code": exit_code,
-                "output": output,
-                "error": error,
-                "duration": duration
-            }
-        
-        except Exception as e:
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            
-            error_msg = f"任务执行出错: {str(e)}"
-            await self._log(task_id, "error", error_msg)
-            
-            return {
-                "task_id": task_id,
-                "status": "error",
-                "exit_code": -1,
-                "output": "\n".join(output_lines) if output_lines else "",
-                "error": error_msg,
-                "duration": duration
-            }
-        
+                process = await asyncio.create_subprocess_exec(*command, **options)
+            self.tasks[task_id] = process
+            async def read_output():
+                while True:
+                    chunk = await process.stdout.read(4096)
+                    if not chunk:
+                        break
+                    text = chunk.decode("utf-8", errors="replace")
+                    output.append(text)
+                    await self._log(task_id, "info", text.rstrip())
+                return await process.wait()
+            code = await asyncio.wait_for(read_output(), timeout=timeout)
+            status = "cancelled" if task_id in self.cancelled else "success" if code == 0 else "failed"
+            error = None if code == 0 else f"进程退出码: {code}"
+        except asyncio.TimeoutError:
+            status, error = "timeout", f"任务执行超时（{timeout}秒）"
+        except asyncio.CancelledError:
+            status, error = "cancelled", "任务已取消"
+        except Exception as exc:
+            error = str(exc)
         finally:
-            # 清理
-            if task_id in self.tasks:
-                del self.tasks[task_id]
-    
+            if process:
+                await terminate_process(process)
+            self.tasks.pop(task_id, None)
+            self.cancelled.discard(task_id)
+        return {"task_id": task_id, "status": status,
+                "exit_code": process.returncode if process else -1,
+                "output": "".join(output), "error": error,
+                "duration": (datetime.now() - started).total_seconds()}
+
     async def cancel_task(self, task_id: str) -> bool:
-        """
-        取消任务
-        
-        Args:
-            task_id: 任务ID
-        
-        Returns:
-            是否成功取消
-        """
-        if task_id not in self.tasks:
-            if self.logger:
-                self.logger.warning(f"任务 {task_id} 不存在或已完成")
-            return False
-        
-        process = self.tasks[task_id]
-        
         try:
-            await self._log(task_id, "warning", "收到取消任务指令，正在终止...")
-            
-            # 终止进程
-            process.terminate()
-            
-            # 等待进程结束，如果5秒后还没结束，强制杀死
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-            
-            await self._log(task_id, "info", "任务已取消")
-            
-            # 清理
-            del self.tasks[task_id]
-            
-            return True
-        
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"取消任务失败: {e}")
+            from .sat_runner import terminate_process
+        except ImportError:
+            from sat_runner import terminate_process
+        process = self.tasks.get(task_id)
+        if process is None:
             return False
-    
+        self.cancelled.add(task_id)
+        await terminate_process(process)
+        return True
+
     def get_task_status(self, task_id: str) -> Optional[str]:
         """
         获取任务状态
@@ -316,7 +168,7 @@ class TaskExecutor:
             return "not_found"
         
         process = self.tasks[task_id]
-        if process.poll() is None:
+        if process.returncode is None:
             return "running"
         else:
             return "completed"

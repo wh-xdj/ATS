@@ -238,29 +238,9 @@ async def execute_test_suite(
             suite.updated_at = beijing_now()
             db.commit()
             
-            # 根据case_ids查询对应的case_code（用于用例筛选）
-            from models.test_case import TestCase
-            test_cases = db.query(TestCase).filter(TestCase.id.in_(suite.case_ids)).all()
-            case_codes = [case.case_code for case in test_cases]
-            
-            # 构建执行任务消息
-            # 只有当git_enabled为'true'时才使用git配置
-            git_enabled = suite.git_enabled == 'true' if hasattr(suite, 'git_enabled') and suite.git_enabled else False
-            
-            task_message = {
-                "type": "execute_test_suite",
-                "suite_id": suite.id,
-                "plan_id": suite.plan_id,
-                "execution_id": execution_id,  # 添加执行ID
-                "git_repo_url": (suite.git_repo_url or None) if git_enabled else None,
-                "git_branch": (suite.git_branch or None) if git_enabled else None,
-                "git_token": (suite.git_token or None) if git_enabled else None,
-                "execution_command": suite.execution_command,
-                "case_ids": suite.case_ids,  # 保留用于结果回填
-                "case_codes": case_codes,  # 新增：用于用例筛选
-                "executor_id": str(current_user.id)
-            }
-            
+            from services.suite_dispatch import build_suite_message
+            task_message = build_suite_message(db, suite, execution_id, str(current_user.id))
+
             # 发送到Agent
             from api.v1.websocket import manager
             success = await manager.send_message(suite.environment_id, task_message)
@@ -401,11 +381,16 @@ async def cancel_test_suite(
                 # 如果任务还在等待中，直接标记为取消，不需要发送消息到Agent
                 pass
             
+            if task.status == "running" and suite.execution_command.strip().startswith("ats-sat"):
+                # The Agent completion ACK releases the slot after the child is stopped.
+                return APIResponse(status=ResponseStatus.SUCCESS, message="取消请求已发送", data={"executionId": execution_id})
+            previous_status = task.status
+
             # 更新任务队列状态为cancelled
             TaskQueueService.complete_task(db, execution_id, "cancelled")
             
             # 取消任务后，尝试执行队列中的下一个任务（无论取消的是running还是pending）
-            if task.status == "running" or task.status == "pending":
+            if previous_status in ["running", "pending"]:
                 next_task = TaskQueueService.get_next_pending_task(db, suite.environment_id)
                 if next_task:
                     if TaskQueueService.can_execute_immediately(db, suite.environment_id):
@@ -421,19 +406,8 @@ async def cancel_test_suite(
                         next_test_cases = db.query(TestCase).filter(TestCase.id.in_(next_suite.case_ids)).all()
                         next_case_codes = [case.case_code for case in next_test_cases]
                         
-                        task_message = {
-                            "type": "execute_test_suite",
-                            "suite_id": next_suite.id,
-                            "plan_id": next_suite.plan_id,
-                            "execution_id": next_task.execution_id,
-                            "git_repo_url": (next_suite.git_repo_url or None) if git_enabled else None,
-                            "git_branch": (next_suite.git_branch or None) if git_enabled else None,
-                            "git_token": (next_suite.git_token or None) if git_enabled else None,
-                            "execution_command": next_suite.execution_command,
-                            "case_ids": next_suite.case_ids,
-                            "case_codes": next_case_codes,  # 新增：用于用例筛选
-                            "executor_id": next_task.executor_id
-                        }
+                        from services.suite_dispatch import build_suite_message
+                        task_message = build_suite_message(db, next_suite, next_task.execution_id, next_task.executor_id)
                         await manager.send_message(suite.environment_id, task_message)
             
             # 检查是否还有其他正在运行或等待的任务
@@ -810,14 +784,19 @@ async def get_suite_suite_executions(
             # 从TestSuiteExecution表获取执行记录（用于判断结果和执行人）
             time_window_start = exec_time - timedelta(minutes=5)
             time_window_end = exec_time + timedelta(minutes=5)
-            exec_records = db.query(TestSuiteExecution).filter(
-                TestSuiteExecution.suite_id == suite_id,
-                TestSuiteExecution.executed_at >= time_window_start,
-                TestSuiteExecution.executed_at <= time_window_end
-            ).all()
+            if suite.execution_command.strip().startswith("ats-sat"):
+                from services.suite_results import result_id
+                ids = [result_id(execution_id_val, cid) for cid in suite.case_ids]
+                exec_records = db.query(TestSuiteExecution).filter(TestSuiteExecution.id.in_(ids)).all()
+            else:
+                exec_records = db.query(TestSuiteExecution).filter(
+                    TestSuiteExecution.suite_id == suite_id,
+                    TestSuiteExecution.executed_at >= time_window_start,
+                    TestSuiteExecution.executed_at <= time_window_end
+                ).all()
             
             # 如果没有找到执行记录，尝试查找最近的
-            if not exec_records:
+            if not exec_records and not suite.execution_command.strip().startswith("ats-sat"):
                 exec_records = db.query(TestSuiteExecution).filter(
                     TestSuiteExecution.suite_id == suite_id
                 ).order_by(TestSuiteExecution.executed_at.desc()).limit(1).all()

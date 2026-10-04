@@ -49,12 +49,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { ReloadOutlined } from '@ant-design/icons-vue'
-import { testSuiteApi, type TestSuite } from '@/api/testSuite'
-import { logWebSocketManager, type LogMessage } from '@/utils/logWebSocket'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { message } from 'ant-design-vue';
+import { ReloadOutlined } from '@ant-design/icons-vue';
+import { testSuiteApi } from '@/api/testSuite';
+import { logWebSocketManager, type LogMessage } from '@/utils/logWebSocket';
 import dayjs from 'dayjs'
 
 const route = useRoute()

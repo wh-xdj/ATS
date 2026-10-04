@@ -25,7 +25,7 @@
           :data-source="executionCases"
           :loading="loading"
           :pagination="pagination"
-          :row-key="record => record.id"
+          row-key="id"
           :row-selection="rowSelection"
           :scroll="{ x: 1500 }"
           @change="handleTableChange"
@@ -195,19 +195,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { ReloadOutlined, SaveOutlined } from '@ant-design/icons-vue'
-import { testPlanApi } from '@/api/testPlan'
-import { projectApi } from '@/api/project'
-import { useUserStore } from '@/stores/user'
+import { ref, reactive, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { message } from 'ant-design-vue';
+import { ReloadOutlined, SaveOutlined } from '@ant-design/icons-vue';
+import { testPlanApi } from '@/api/testPlan';
+import { projectApi } from '@/api/project';
+
 import dayjs from 'dayjs'
-import type { TestCase } from '@/types'
+
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
+
 
 const loading = ref(false)
 const planName = ref('')
@@ -327,7 +327,7 @@ const loadPlanExecution = async () => {
   loading.value = true
   try {
     const response = await testPlanApi.getTestPlan(planId.value)
-    const plan = response.data || response
+    const plan = response
 
     if (!plan) {
       message.error('测试计划不存在')
@@ -413,7 +413,7 @@ const updatePlanProgress = async () => {
   try {
     // 重新加载计划信息以获取最新的执行进度
     const response = await testPlanApi.getTestPlan(planId.value)
-    const plan = response.data || response
+    const plan = response
     
     if (plan) {
       // 更新本地用例数据中的执行状态
@@ -453,7 +453,7 @@ const rowSelection = {
   onChange: (keys: string[]) => {
     selectedRowKeys.value = keys
   },
-  onSelectAll: (selected: boolean, selectedRows: any[], changeRows: any[]) => {
+  onSelectAll: (selected: boolean, selectedRows: any[], _changeRows: any[]) => {
     if (selected) {
       selectedRowKeys.value = selectedRows.map(row => row.id)
     } else {

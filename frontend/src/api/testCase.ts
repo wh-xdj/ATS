@@ -1,5 +1,6 @@
-import { apiClient } from '@/utils/api'
-import type { TestCase, TestCaseStep, PaginationResponse } from '@/types'
+import { apiClient } from '@/utils/api';
+import type { TestCase, PaginationResponse } from '@/types';
+import { casePayload } from '@/utils/casePayload'
 
 export const testCaseApi = {
   getTestCases: async (
@@ -55,7 +56,7 @@ export const testCaseApi = {
   createTestCase: async (projectId: string, data: Partial<TestCase>): Promise<TestCase> => {
     // 后端使用下划线命名的 project_id
     const payload: any = {
-      ...data,
+      ...casePayload(data),
       project_id: projectId
     }
     return apiClient.post('/test-cases', payload)
@@ -67,12 +68,13 @@ export const testCaseApi = {
     data: Partial<TestCase>
   ): Promise<TestCase> => {
     const payload: any = {
-      ...data,
+      ...casePayload(data),
       project_id: projectId
     }
     return apiClient.put(`/test-cases/${caseId}`, payload)
   },
 
+  executeCase: async (caseId: string, suiteId: string) => apiClient.post(`/test-cases/${caseId}/execute`, { suiteId }),
   getFilterFields: async (projectId: string): Promise<any[]> => {
     return apiClient.get('/test-cases/filter-fields', {
       params: { project_id: projectId }

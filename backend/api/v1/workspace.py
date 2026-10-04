@@ -1,5 +1,5 @@
 """工作空间API - 通过WebSocket与Agent通信"""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from database import get_db
 from models.user import User
@@ -293,3 +293,27 @@ async def create_workspace_directory(
             detail=f"创建文件夹失败: {str(e)}"
         )
 
+
+
+@router.post('/{environment_id}/workspace/upload')
+async def upload_workspace_file(environment_id: str, path: str=Form(''), file: UploadFile=File(...),
+    db: Session=Depends(get_db),current_user: User=Depends(get_current_user)):
+    import base64
+    from pathlib import PurePosixPath
+    name=file.filename or ''
+    if name in ['', '.', '..'] or len(name.encode('utf-8'))>255 or any(c in name for c in ['/','\\','\x00','\r','\n']):
+        raise HTTPException(400,'非法文件名')
+    if path.startswith('/') or '\\' in path or '..' in PurePosixPath(path).parts:
+        raise HTTPException(400,'上传路径必须在工作空间内')
+    content=await file.read(10*1024*1024+1)
+    if len(content)>10*1024*1024: raise HTTPException(413,'最大上传10MB')
+    environment=EnvironmentService.get_environment(db,environment_id)
+    if not environment: raise HTTPException(404,'环境不存在')
+    from core.permissions import has_global_permission
+    if environment.get('createdBy') != str(current_user.id) and not has_global_permission(db,current_user.id,'system','manage'):
+        raise HTTPException(403,'仅节点创建人或系统管理员可以上传文件')
+    if not environment.get('isOnline'): raise HTTPException(503,'环境离线')
+    target=str(PurePosixPath(path)/name)
+    data=await send_workspace_request(environment_id,'workspace_write',dict(path=target,
+        content=base64.b64encode(content).decode('ascii'),is_base64=True,overwrite=False))
+    return APIResponse(status='success',message='文件已上传',data=data)

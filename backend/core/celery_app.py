@@ -6,7 +6,7 @@ celery_app = Celery(
     "ats",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["tasks"]
+    include=["tasks.test_case_tasks"]
 )
 
 # Celery配置

@@ -7,7 +7,7 @@
       <a-col :xs="24" :lg="8">
         <a-card class="profile-card">
           <div class="profile-header">
-            <a-avatar :size="80" :src="user?.avatar">
+            <a-avatar :size="80" >
               <template #icon><UserOutlined /></template>
             </a-avatar>
             <h2>{{ user?.fullName || user?.username }}</h2>
@@ -273,7 +273,7 @@ const handleSaveNotifications = async () => {
   try {
     savingNotifications.value = true
     // TODO: 调用保存通知设置的API
-    message.success('通知设置已保存')
+    message.info('站内通知已自动启用；邮件/Webhook/SMS偏好尚未支持，未保存')
   } catch (error) {
     console.error('Failed to save notifications:', error)
     message.error('保存通知设置失败')

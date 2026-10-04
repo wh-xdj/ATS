@@ -50,7 +50,8 @@ export interface ProjectStats {
 }
 
 export interface ReportRequest {
-  type: 'summary' | 'detailed' | 'trend'
+  name?: string
+  type: 'summary' | 'detailed' | 'trend' | 'coverage'
   startDate: string
   endDate: string
   includeContent: string[]
@@ -175,9 +176,8 @@ const dashboardApi = {
 
   // 下载报告
   downloadReport: async (reportId: string) => {
-    return apiClient.get(`/dashboard/reports/${reportId}/download`, {
-      responseType: 'blob'
-    })
+    const response = await apiClient.getInstance().get(`/dashboard/reports/${reportId}/download`, { responseType: 'blob' })
+    return response.data as Blob
   },
 
   // 获取仪表盘配置

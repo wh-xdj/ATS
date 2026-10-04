@@ -44,10 +44,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { DownOutlined, RightOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons-vue'
-import { testCaseApi } from '@/api/testCase'
-import type { TreeNode } from '@/types'
+import { ref, watch } from 'vue';
+import { DownOutlined, RightOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons-vue';
+import { testCaseApi } from '@/api/testCase';
+import type { TreeNode } from '@/types';
 
 interface Props {
   projectId: string
@@ -96,13 +96,13 @@ const getPriorityColor = (level?: string) => {
   }
 }
 
-const onSelect = (selectedKeys: string[], info: any) => {
+const onSelect = (_selectedKeys: string[], info: any) => {
   if (info.node) {
     emit('select', info.node)
   }
 }
 
-const onExpand = (expandedKeys: string[]) => {
+const onExpand = (_expandedKeys: string[]) => {
   emit('refresh')
 }
 
@@ -122,7 +122,7 @@ const onLoadData = async (treeNode: any) => {
   try {
     if (treeNode.dataRef.type === 'module') {
       // 加载模块下的子模块和用例
-      const response = await testCaseApi.getCaseTree(props.projectId)
+      await testCaseApi.getCaseTree(props.projectId)
       // 这里需要根据实际API响应处理数据
       console.log('load module children', treeNode.dataRef.key)
     }
@@ -156,11 +156,10 @@ const fetchTreeData = async () => {
 }
 
 const filterTreeData = (data: TreeNode[], searchValue: string): TreeNode[] => {
-  const filtered: TreeNode[] = []
   
   const search = (nodes: TreeNode[]): TreeNode[] => {
     return nodes
-      .map(node => {
+      .map((node): TreeNode | null => {
         const isMatch = node.title.toLowerCase().includes(searchValue.toLowerCase()) ||
                        (node.caseCode && node.caseCode.toLowerCase().includes(searchValue.toLowerCase()))
         
